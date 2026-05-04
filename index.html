@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>升级 · 记分册</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Noto+Sans+SC:wght@300;400;500&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0d0d0f;--bg2:#141418;--bg3:#1c1c22;--bg4:#242430;--border:#2e2e3a;--border2:#3a3a4a;--text:#e8e4dc;--text2:#9990a0;--text3:#5a5468;--accent:#c8954a;--accent2:#e8b86d;--red:#d95f5f;--red2:#f07878;--green:#5aaa7a;--green2:#7acc96;--gold:#d4af6a;--gold2:#f0cc88;--purple:#8b6aaa;--radius:12px;--radius2:8px}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--text);font-family:"Noto Sans SC",sans-serif;font-size:14px;min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(ellipse at 20% 20%,rgba(200,149,74,.04) 0%,transparent 50%),radial-gradient(ellipse at 80% 80%,rgba(139,106,170,.04) 0%,transparent 50%);pointer-events:none;z-index:0}
+.nav{position:sticky;top:0;z-index:100;background:rgba(13,13,15,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 16px;display:flex;align-items:center;height:52px}
+.nav-title{font-family:"Noto Serif SC",serif;font-size:18px;font-weight:700;color:var(--accent2);letter-spacing:.1em;flex:1}
+.nav-title span{color:var(--text3);font-size:11px;font-weight:400;margin-left:6px;font-family:"Noto Sans SC";letter-spacing:0}
+.nav-tabs{display:flex;gap:2px}
+.nav-tab{padding:6px 12px;border-radius:var(--radius2);font-size:12px;font-weight:500;color:var(--text2);cursor:pointer;border:none;background:none;transition:all .2s}
+.nav-tab.active{background:var(--bg3);color:var(--accent2)}
+.page{display:none;padding:16px;position:relative;z-index:1}
+.page.active{display:block}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+.card-title{font-family:"Noto Serif SC",serif;font-size:13px;font-weight:600;color:var(--accent);letter-spacing:.05em;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card-title::before{content:'';display:inline-block;width:3px;height:14px;background:var(--accent);border-radius:2px}
+.btn{display:inline-flex;align-items:center;justify-content:center;padding:10px 20px;border-radius:var(--radius2);font-family:"Noto Sans SC";font-size:13px;font-weight:500;cursor:pointer;border:none;transition:all .2s;gap:6px}
+.btn-primary{background:var(--accent);color:#0d0d0f}.btn-primary:hover{background:var(--accent2)}
+.btn-secondary{background:var(--bg3);color:var(--text);border:1px solid var(--border2)}.btn-secondary:hover{border-color:var(--accent);color:var(--accent)}
+.btn-danger{background:rgba(217,95,95,.15);color:var(--red2);border:1px solid rgba(217,95,95,.3)}
+.btn-sm{padding:6px 12px;font-size:12px}.btn-full{width:100%}.btn:disabled{opacity:.4;cursor:not-allowed}
+.input-group{margin-bottom:14px}
+.input-label{font-size:12px;color:var(--text2);margin-bottom:6px;display:block}
+input,select{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius2);color:var(--text);font-family:"Noto Sans SC";font-size:14px;padding:10px 12px;outline:none;transition:border-color .2s;-webkit-appearance:none}
+input:focus,select:focus{border-color:var(--accent)}
+select option{background:var(--bg3)}
+.score-display{font-family:"Playfair Display",serif;font-size:56px;font-weight:700;text-align:center;line-height:1;margin:8px 0 4px;transition:color .3s}
+.score-label{text-align:center;font-size:12px;color:var(--text2);margin-bottom:16px;height:18px}
+.slider-wrap{padding:0 4px}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:6px;padding:0;background:var(--bg4);border-radius:3px;border:none;outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:var(--accent);cursor:pointer;box-shadow:0 0 0 3px rgba(200,149,74,.2)}
+.score-ticks{display:flex;justify-content:space-between;padding:4px 2px 0;font-size:10px;color:var(--text3)}
+.players-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px}
+.player-chip{background:var(--bg3);border:2px solid var(--border);border-radius:var(--radius);padding:10px 8px;text-align:center;cursor:pointer;transition:all .2s;position:relative;user-select:none}
+.player-chip.dealer{border-color:var(--gold);background:rgba(212,175,106,.08)}
+.player-chip.helper{border-color:var(--purple);background:rgba(139,106,170,.08)}
+.player-chip.farmer{border-color:var(--green);background:rgba(90,170,122,.08)}
+.player-chip .chip-name{font-size:12px;font-weight:500;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.player-chip .chip-level{font-size:10px;color:var(--text3)}
+.player-chip .chip-role{position:absolute;top:-8px;left:50%;transform:translateX(-50%);font-size:9px;padding:2px 6px;border-radius:10px;white-space:nowrap}
+.player-chip.dealer .chip-role{background:var(--gold);color:#0d0d0f}
+.player-chip.helper .chip-role{background:var(--purple);color:#fff}
+.player-chip.farmer .chip-role{background:var(--green);color:#0d0d0f}
+.player-avatar{width:36px;height:36px;border-radius:50%;background:var(--bg4);margin:0 auto 4px;display:flex;align-items:center;justify-content:center;font-size:16px;overflow:hidden}
+.player-avatar img{width:100%;height:100%;object-fit:cover}
+.red-five-row{display:flex;gap:10px;margin-bottom:8px}
+.red-five-card{flex:1;border:2px solid var(--border);background:var(--bg3);border-radius:var(--radius2);padding:10px;text-align:center}
+.red-five-card.active-heart{border-color:var(--red);background:rgba(217,95,95,.1)}
+.red-five-card.active-diamond{border-color:var(--accent);background:rgba(200,149,74,.08)}
+.red-five-suit{font-size:22px;display:block;line-height:1.2}
+.red-five-label{font-size:10px;color:var(--text2);margin:2px 0 6px}
+.red-five-counter{display:flex;align-items:center;justify-content:center;gap:8px}
+.rf-count{font-family:"Playfair Display";font-size:18px;min-width:20px}
+.who-prompt{background:var(--bg4);border-radius:var(--radius2);padding:10px 12px;margin-top:8px;font-size:12px;color:var(--text2)}
+.who-prompt strong{color:var(--text);display:block;margin-bottom:6px}
+.who-captor-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.who-captor-label{font-size:12px;color:var(--text2);min-width:28px}
+.mini-player-row{display:flex;gap:6px;flex-wrap:wrap}
+.mini-player-btn{padding:5px 10px;border-radius:20px;border:1px solid var(--border2);background:var(--bg3);font-size:12px;cursor:pointer;transition:all .2s;color:var(--text2)}
+.mini-player-btn.sel-heart{border-color:var(--red);background:rgba(217,95,95,.1);color:var(--red2)}
+.mini-player-btn.sel-diamond{border-color:var(--accent);background:rgba(200,149,74,.1);color:var(--accent2)}
+.penalty-row{display:flex;align-items:center;gap:8px;background:var(--bg3);border-radius:var(--radius2);padding:8px 12px;margin-bottom:8px}
+.penalty-player{flex:1;font-size:13px}
+.penalty-count{font-family:"Playfair Display";font-size:18px;color:var(--red2);min-width:28px;text-align:center}
+.counter-btn{width:30px;height:30px;border-radius:50%;border:1px solid var(--border2);background:var(--bg4);color:var(--text);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.counter-btn:hover{border-color:var(--accent);color:var(--accent)}
+.level-badge{display:inline-flex;align-items:center;justify-content:center;min-width:40px;height:22px;border-radius:11px;font-size:11px;font-weight:600;padding:0 8px;font-family:"Noto Serif SC"}
+.level-r1{background:rgba(90,170,122,.15);color:var(--green2);border:1px solid rgba(90,170,122,.3)}
+.level-r2{background:rgba(200,149,74,.15);color:var(--gold2);border:1px solid rgba(200,149,74,.3)}
+.level-b{background:rgba(217,95,95,.15);color:var(--red2);border:1px solid rgba(217,95,95,.3)}
+.round-item{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:border-color .2s}
+.round-item:hover{border-color:var(--border2)}
+.round-header{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.round-num{font-family:"Playfair Display";font-size:13px;color:var(--text3);min-width:28px}
+.round-roles{flex:1;font-size:12px;color:var(--text2)}
+.round-score{font-family:"Playfair Display";font-size:20px;font-weight:700}
+.round-achievements{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.ach-tag{font-size:10px;padding:2px 7px;border-radius:10px;background:var(--bg4);border:1px solid var(--border2);color:var(--text2)}
+.ach-tag.gold{background:rgba(212,175,106,.12);border-color:rgba(212,175,106,.3);color:var(--gold2)}
+.ach-tag.red{background:rgba(217,95,95,.12);border-color:rgba(217,95,95,.3);color:var(--red2)}
+.ach-tag.green{background:rgba(90,170,122,.12);border-color:rgba(90,170,122,.3);color:var(--green2)}
+.ach-tag.purple{background:rgba(139,106,170,.12);border-color:rgba(139,106,170,.3);color:#b898dd}
+.stat-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+.stat-row:last-child{border-bottom:none}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;align-items:flex-end}
+.modal-overlay.open{display:flex}
+.modal{background:var(--bg2);border-top:1px solid var(--border);border-radius:20px 20px 0 0;padding:20px 16px 40px;width:100%;max-height:88vh;overflow-y:auto;animation:slideUp .3s ease}
+@keyframes slideUp{from{transform:translateY(40px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal-handle{width:36px;height:4px;border-radius:2px;background:var(--border2);margin:0 auto 16px}
+.modal-title{font-family:"Noto Serif SC";font-size:16px;font-weight:700;margin-bottom:16px;color:var(--accent2)}
+.setup-hero{text-align:center;padding:32px 0 24px}
+.setup-hero h1{font-family:"Noto Serif SC";font-size:32px;color:var(--accent2);letter-spacing:.1em;margin-bottom:6px}
+.setup-hero p{color:var(--text2);font-size:13px}
+.divider{border:none;border-top:1px solid var(--border);margin:16px 0}
+.inner-tabs{display:flex;gap:4px;background:var(--bg3);border-radius:var(--radius2);padding:3px;margin-bottom:14px}
+.inner-tab{flex:1;padding:7px;border-radius:6px;font-size:12px;font-weight:500;text-align:center;cursor:pointer;color:var(--text2);transition:all .2s;border:none;background:none}
+.inner-tab.active{background:var(--bg);color:var(--text)}
+/* Seat drag */
+.seat-list{display:flex;flex-direction:column;gap:8px}
+.seat-item{display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--bg3);border-radius:var(--radius2);border:1px solid var(--border);cursor:grab;user-select:none;transition:background .2s}
+.seat-item.dragging{opacity:.5;background:var(--bg4)}
+.seat-item.drag-over{border-color:var(--accent);background:rgba(200,149,74,.06)}
+.drag-handle{color:var(--text3);font-size:18px;flex-shrink:0;cursor:grab}
+.seat-num{font-size:11px;color:var(--text3);min-width:36px}
+.seat-avatar{width:36px;height:36px;border-radius:50%;background:var(--bg4);display:flex;align-items:center;justify-content:center;font-size:16px;overflow:hidden;flex-shrink:0}
+.seat-avatar img{width:100%;height:100%;object-fit:cover}
+.seat-name{flex:1;font-size:13px}
+.avatar-upload-wrap{width:44px;height:44px;border-radius:50%;background:var(--bg3);border:2px dashed var(--border2);display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;flex-shrink:0;font-size:18px}
+.avatar-upload-wrap img{width:100%;height:100%;object-fit:cover}
+.level-chart{overflow-x:auto;padding-bottom:8px}
+.result-banner{border-radius:var(--radius);padding:14px 16px;margin-bottom:14px;text-align:center}
+.result-banner.dealer-win{background:linear-gradient(135deg,rgba(212,175,106,.15),rgba(212,175,106,.05));border:1px solid rgba(212,175,106,.3)}
+.result-banner.farmer-win{background:linear-gradient(135deg,rgba(90,170,122,.15),rgba(90,170,122,.05));border:1px solid rgba(90,170,122,.3)}
+.result-banner.no-change{background:var(--bg3);border:1px solid var(--border)}
+.result-title{font-family:"Noto Serif SC";font-size:16px;font-weight:700;margin-bottom:4px}
+.result-detail{font-size:12px;color:var(--text2)}
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--bg3);border:1px solid var(--border2);border-radius:20px;padding:10px 20px;font-size:13px;z-index:300;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.empty{text-align:center;padding:40px 20px;color:var(--text3);font-size:13px}
+.empty-icon{font-size:40px;margin-bottom:12px;opacity:.4}
+.radio-group{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.radio-btn{padding:7px 14px;border-radius:var(--radius2);border:1px solid var(--border2);background:var(--bg3);font-size:12px;cursor:pointer;transition:all .2s;color:var(--text2)}
+.radio-btn.selected{border-color:var(--accent);background:rgba(200,149,74,.1);color:var(--accent2)}
+.flex-row{display:flex;gap:8px}.flex-1{flex:1}
+.section-label{font-size:11px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px;margin-top:4px}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+</style>
+</head>
+<body>
+<nav class="nav">
+  <div class="nav-title">升级<span id="sessionIndicator"></span></div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="showPage('home',this)">主页</button>
+    <button class="nav-tab" onclick="showPage('round',this)">记分</button>
+    <button class="nav-tab" onclick="showPage('stats',this)">统计</button>
+    <button class="nav-tab" onclick="showPage('settings',this)">设置</button>
+  </div>
+</nav>
+<div class="toast" id="toast"></div>
+<div class="page active" id="page-home"><div id="homeContent"></div></div>
+<div class="page" id="page-round"><div id="roundContent"></div></div>
+<div class="page" id="page-stats"><div id="statsContent"></div></div>
+<div class="page" id="page-settings"><div id="settingsContent"></div></div>
+
+<div class="modal-overlay" id="modalSessionSetup">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🀄 新局设置</div>
+    <div class="input-group">
+      <label class="input-label">终局条件：任意玩家到达此级别时，本局结束</label>
+      <div class="flex-row">
+        <div class="flex-1"><select id="setupEndLevel">
+          <option value="2">2</option><option value="4">4</option><option value="6">6</option>
+          <option value="7">7</option><option value="8">8</option><option value="9">9</option>
+          <option value="10">10</option><option value="J">J</option><option value="Q">Q</option>
+          <option value="K">K</option><option value="A" selected>A</option>
+        </select></div>
+        <div class="flex-1"><select id="setupEndRound">
+          <option value="B3">地下室3</option><option value="B2">地下室2</option>
+          <option value="B1">地下室1</option><option value="R1" selected>第一轮</option>
+          <option value="R2">第二轮</option><option value="R3">第三轮</option>
+        </select></div>
+      </div>
+    </div>
+    <div class="input-group">
+      <label class="input-label">起始庄家</label>
+      <div class="radio-group" id="setupFirstDealer"></div>
+    </div>
+    <button class="btn btn-primary btn-full" onclick="startSession()">开始本局</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalRoundDetail">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div id="roundDetailContent"></div>
+    <button class="btn btn-secondary btn-full" onclick="closeModal('modalRoundDetail')">关闭</button>
+  </div>
+</div>
+
+<script>
+// ══════ LEVEL SYSTEM ══════
+// Flat linear sequence. B3:2 < B2:2 < B1:2 < R1:2 < R1:4 < ... < R1:A < R2:2 < ...
+// A "key" is a string like "R1:A" or "B2:2"
+// We build a flat ordered array and index into it.
+
+const LEVEL_NAMES = ['2','4','6','7','8','9','10','J','Q','K','A']; // 11 levels
+const REGULAR_ROUNDS = ['R1','R2','R3','R4','R5'];
+const BASEMENT_ROUNDS = ['B1','B2','B3','B4','B5']; // B1 closest to surface
+
+// Build flat sequence
+function buildSequence() {
+  const seq = [];
+  // Basement: deepest first so index increases going up
+  // B5:2, B4:2, B3:2, B2:2, B1:2, R1:2, R1:4, ... R1:A, R2:2, ...
+  for (let i = BASEMENT_ROUNDS.length - 1; i >= 0; i--) {
+    seq.push(BASEMENT_ROUNDS[i] + ':2');
+  }
+  for (const r of REGULAR_ROUNDS) {
+    for (const l of LEVEL_NAMES) {
+      seq.push(r + ':' + l);
+    }
+  }
+  return seq;
+}
+const LEVEL_SEQ = buildSequence();
+// LEVEL_SEQ[0] = B5:2 (deepest basement)
+// LEVEL_SEQ[4] = B1:2 (shallowest basement)
+// LEVEL_SEQ[5] = R1:2 (start)
+// LEVEL_SEQ[15] = R1:A
+// LEVEL_SEQ[16] = R2:2
+
+const START_KEY = 'R1:2';
+
+function keyIndex(key) { return LEVEL_SEQ.indexOf(key); }
+
+function stepLevel(key, steps) {
+  let idx = keyIndex(key);
+  if (idx === -1) idx = keyIndex(START_KEY);
+  idx = Math.max(0, Math.min(LEVEL_SEQ.length - 1, idx + steps));
+  return LEVEL_SEQ[idx];
+}
+
+function levelDisplay(key) {
+  if (!key) return '?';
+  const col = key.indexOf(':');
+  const round = key.slice(0, col);
+  const level = key.slice(col + 1);
+  if (round === 'R1') return level;
+  if (round.startsWith('R')) return `${level}(第${round.slice(1)}轮)`;
+  // Basement: B1 = 地下1, B2 = 地下2, etc.
+  return `${level}(地下${round.slice(1)})`;
+}
+
+function isBasement(key) {
+  return key && key.startsWith('B');
+}
+
+// ══════ STATE ══════
+let state = {
+  players: [
+  { id: 0, name: "BR", avatar: "data:image/jpeg;base64,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", seat: 0 },
+  { id: 1, name: "HZB", avatar: "data:image/jpeg;base64,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", seat: 1 },
+  { id: 2, name: "JR", avatar: "data:image/jpeg;base64,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", seat: 2 },
+  { id: 3, name: "TFH", avatar: "data:image/jpeg;base64,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", seat: 3 },
+  { id: 4, name: "WYH", avatar: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCABQAFADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD3tnkx8kYP1bFRvLMnVYR9XP8AhXKax480qxQxpJJcS+kTbV/76/wrhNQ+IN7IXFoUtVbqY+WP1Y5NbRoyZm5nq82tG2b98tvFGDy8s2wfhkZP4Vj3XxC0u1yNrSsD/wAsjkH8SBXjkuqXV9IWMkkrHqxJP6moDgtiSbJ/uxjcfz6VuqEFuTzSex6dcfFblhb2CjHeRyf5VmS/E/VZWxEkC+yx5rg2uIIONkan/podx/IUw6qzHZH5r+y/KPyFaqnTW0SXfqzvP+E/8RvyGAH/AFxUfzFOTx74hU8ywH2ZUrgt14/P2faPVx/jT1F2RnzIlHsy0+Wn2QWfmek2/wARNXUgSwWUg784P6GtSD4j/wDPxppA9Y5Qa8iLXC/8vAP0YU0Xcoba0jA+hFHsqT6Du11Kge5uBvPyJ/fc4H/16UeUuSAZiOrPwgrPn1FN2Sxnk9c4Uf41pTeGdc/suLU9Rge1s5JEjiEo2s5bn5V9AATk+lZX7lWK82pJ93cZfRU+VBVaW6uOjnyVIzsUYJFSxQCHU7eC3G5pOPmGSf8ACvXvEXwnTWYLGSyvha3UFqkDpJESjle+RyDyfWl7WMWrj5W0eU+Hr/RbbUwdbsZbm12twkhUhscEgdRnj8c1Xa4vZ03xMYY25WOP5Rj04rauPhf4pt/LmWzjuIXYANDKCSCeu04PvVSWJo/KjjdkZQBz0/GiVWN7xdxwg3uYTmVW/eBs/wC1zUsV88Ue0YIJ79q2VRiGZpBuxggqCBXM3YMEwBIww3ADsDWtOop6MU6fLqasN8zthgMe1betaTPpdtaSSyQypPCJopIWyrIT/OuOgl/eDmt2K7mubB7eSV3SFD5alshATkgenPNOWjTRmiTw74n0fw4okGgR395nPn3b52/7q4wPrya0NY8c/wDCUvGJNOhtPs4Zh5TZDFsDJ/DP5msLxNpVvpWqyC0YSWUh3QuP7p6VlWjGefykKrvYLk8Ae59q5nyy9401Ln9rfYdXS625eJN0YYZBbtn2qx4gvteNxbXmqXs5muovORBIw8tSSAMdB64FJ4Y0ibWvH1po10gRbiTZJnBxEBuJU9OQOCPWu7+MWlaTYX2l2lnZQ2+Ld3YxLgn5gBk9+hp8yUkhPZs83HivXYIlij1i+WNeiee2B9Oa14ZnuNOtLyQrmRSCCeDgkc/lWPo2lLdN9pnAaLB2Kw6jpk/jWpFL5tgYUVVgRyEUDGF9fxOaKrVtC6N+YdeXfkWspV97KhOfSuZuLpblzKVYSHqd3H5VsyKXDRhcRnhs1kX+nNEzS22Wj6lP4l/xFXRshVpXdhkL/Pnco+tbelyn7ZNCSrDyzlkO5T+Nc1kqQG6+npWvocn+nKPVT/KtZ6pmaK76m5tktZjui6x5/h9R+FVY737FO27rscr+PAqq77osDqDkfWmXO25tY5UH7xTtIHUio5UCZ1uga7eaXLZatZsI54kZYgsIbZwVOM+vOc8UzVLm81m9SFpWaeYszuzZ2KTuZj6dfzNWtM0d7nRdNuHVfsqWrCRd+CzB24H5isfUr2LTZ2jtY3VZFwWf7w9vpxXKn79kjfSUDqUiitLFYIhj5OvfHb9Kz7gRpKwjJBY7mVfuj/69R/a8pH+8yAnzEH0HSoPM2thvvdWA6k+grRIw1JHYKSz8KoyayWubjUJzFBlIV+8w44p2o3fmqsKEDLDeR0Apbe7jtYTBApmZjksq4yf51qkIpapClvJEUGCwIbHcipdHmEWoRljgDOfyq1Lpt3flHmjWBF5BkbbVmDSrGDHmXDSH0iXA/M1W6sNKxybXfmzMzBVLHO1BgfgK1X8O3R0jTr6w8y7N2JPOijjOYHVsYPsVKnPufSuk8X6bcaFqGLNVSym5j8qNF2nupIArmmlu5l/ezNt/2nJH68UlJSSaG007WOu0S5hsPJi1Nkt7OIlRD5gZwjKc8A9j+tc7qC2F1PE0t6z+W5YrFFy3Pv0rMMltH9+Uv7Jz/gKjOpIjBYYFBP8AE/zfp0qFCKd0NOVrG/8Abo5Nq29jI5XjLv8A0FRTTyEES3FvbA9VjGWP5ZNYZvbifh5WK/3c4H5VJGmT7VagiGy8r2SHIiluG/vSttH5DmrsNzOy/uykC9lhXb+vX9aqW1s0hAUe1asNqQAAKuMFJ6ic2iJUJbJySe5OTVmKImrEVoeOK0rXTnlYKiZY9AK2bSRmrtn/2Q==", seat: 4 },
+  { id: 5, name: "YY", avatar: "data:image/jpeg;base64,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", seat: 5 },
+  ],
+  sessions: [],
+  currentSession: null,
+};
+
+function saveState() { try { localStorage.setItem('sj_v3', JSON.stringify(state)); } catch(e){} }
+function loadState() {
+  try {
+    const raw = localStorage.getItem('sj_v3');
+    if (raw) {
+      const loaded = JSON.parse(raw);
+      // Keep embedded avatars and names as defaults
+      const defaults = getDefaultPlayers();
+      loaded.players = loaded.players.map((p, i) => ({
+        ...p,
+        avatar: p.avatar || (defaults[i] && defaults[i].avatar) || null,
+        name: p.name || (defaults[i] && defaults[i].name) || `P${i+1}`,
+      }));
+      state = loaded;
+    }
+  } catch(e) {}
+}
+
+function getDefaultPlayers() {
+  return state.players; // already set from embedded data
+}
+
+function exportData() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `shengji_${new Date().toISOString().slice(0,10)}.json`;
+  a.click(); URL.revokeObjectURL(url); showToast('已导出存档 📁');
+}
+function importData(file) {
+  const r = new FileReader();
+  r.onload = e => { try { state=JSON.parse(e.target.result); saveState(); renderAll(); showToast('已导入 ✅'); } catch(e){ showToast('格式错误 ❌'); } };
+  r.readAsText(file);
+}
+
+// ══════ SCORE LOGIC ══════
+function getScoreResult(score) {
+  if (score === 0)  return {side:'dealer', levels:3};
+  if (score <= 55)  return {side:'dealer', levels:2};
+  if (score <= 115) return {side:'dealer', levels:1};
+  if (score <= 175) return {side:'none',   levels:0};
+  if (score <= 235) return {side:'farmer', levels:1};
+  if (score <= 295) return {side:'farmer', levels:2};
+  return                   {side:'farmer', levels:3};
+}
+function getScoreLabel(s) {
+  if (s===0) return '大光头 💀';
+  if (s<=59) return '小光头 😬';
+  if (s<=115) return '庄家胜';
+  if (s<=175) return '平局';
+  if (s<=239) return '小跳 🎉';
+  if (s<=299) return '大跳 🚀';
+  return '超级跳 🌟';
+}
+function getScoreColor(s) {
+  if (s<=115) return 'var(--gold2)';
+  if (s<=175) return 'var(--text2)';
+  return 'var(--green2)';
+}
+
+function computeLevelChanges(round, session) {
+  const {dealerId, helperIds, score, heartFiveCaptors, diamondFiveCaptors, penalties} = round;
+  const dealerSide = [dealerId, ...helperIds];
+  const farmerIds = session.players.filter(p => p !== dealerId && !helperIds.includes(p));
+  const result = getScoreResult(score);
+  const changes = {}; session.players.forEach(p => changes[p] = 0);
+
+  if (result.side === 'dealer') dealerSide.forEach(p => changes[p] += result.levels);
+  else if (result.side === 'farmer') farmerIds.forEach(p => changes[p] += result.levels);
+
+  const hCount = (heartFiveCaptors||[]).length;
+  const dCount = (diamondFiveCaptors||[]).length;
+  if (hCount > 0) dealerSide.forEach(p => changes[p] -= 2 * hCount);
+  if (dCount > 0) dealerSide.forEach(p => changes[p] -= 1 * dCount);
+
+  Object.entries(penalties||{}).forEach(([pid, cnt]) => { changes[parseInt(pid)] -= cnt; });
+  return changes;
+}
+
+function applyLevelChanges(session, changes) {
+  const nL = {...session.playerLevels};
+  Object.entries(changes).forEach(([pid, delta]) => {
+    nL[parseInt(pid)] = stepLevel(nL[parseInt(pid)] || START_KEY, delta);
+  });
+  return nL;
+}
+
+// ══════ ACHIEVEMENTS ══════
+function computeAchievements(round, session, levelsBefore, levelsAfter) {
+  const {dealerId, helperIds, score, heartFiveCaptors, diamondFiveCaptors, penalties} = round;
+  const result = getScoreResult(score);
+  const dealerSide = [dealerId, ...helperIds];
+  const farmerIds = session.players.filter(p => p !== dealerId && !helperIds.includes(p));
+  const achs = [];
+  const ach = (name, color, pid=null) => achs.push({name, color, pid});
+
+  if (score === 0) ach('大光头', 'red');
+  else if (score <= 59) ach('小光头', 'red');
+  if (score >= 300) ach('超级跳', 'green');
+  else if (score >= 240) ach('大跳', 'green');
+  else if (score >= 180) ach('小跳', 'green');
+
+  (heartFiveCaptors||[]).forEach(pid => ach('抓住红五♥', 'red', pid));
+  (diamondFiveCaptors||[]).forEach(pid => ach('抓住方五♦', 'gold', pid));
+
+  const rfCaptured = (heartFiveCaptors||[]).length + (diamondFiveCaptors||[]).length > 0;
+  if (rfCaptured && result.side !== 'dealer') ach('坏了坏了', 'red');
+
+  if (helperIds.length === 0) {
+    ach('How dare you?', 'purple', dealerId);
+    if (result.side === 'dealer') ach('Lone Wolf', 'gold', dealerId);
+  } else if (helperIds.length === 1) {
+    ach('浪漫双人车驾驶员', 'purple', dealerId);
+    ach('浪漫双人车乘客', 'purple', helperIds[0]);
+  }
+
+  Object.entries(penalties||{}).forEach(([pidStr, cnt]) => {
+    const pid = parseInt(pidStr);
+    if (cnt >= 2) ach('手残党', 'red', pid);
+    if (cnt > 0 && levelsBefore[pid] === levelsAfter[pid]) ach('虚惊一场', 'purple', pid);
+  });
+
+  if (result.side === 'dealer') {
+    let streak = 1;
+    for (let i = session.rounds.length - 1; i >= 0; i--) {
+      if (session.rounds[i].dealerId === dealerId) streak++;
+      else break;
+    }
+    if (streak >= 9) ach('我要验牌', 'gold', dealerId);
+    else if (streak >= 7) ach('一个人玩儿得了', 'gold', dealerId);
+    else if (streak >= 5) ach('不倒翁', 'gold', dealerId);
+    else if (streak >= 3) ach('房东收租', 'gold', dealerId);
+  }
+
+  session.players.forEach(pid => {
+    const before = levelsBefore[pid]||'';
+    const after = levelsAfter[pid]||'';
+    if (isBasement(before) && !isBasement(after)) ach('Redemption Arc', 'green', pid);
+  });
+
+  return achs;
+}
+
+function computeSessionAchievements(session) {
+  const achs = [];
+  const c = {}; session.players.forEach(p => c[p]={d:0,h:0,f:0});
+  session.rounds.forEach(r => {
+    c[r.dealerId].d++;
+    r.helperIds.forEach(h => c[h].h++);
+    session.players.filter(p=>p!==r.dealerId&&!r.helperIds.includes(p)).forEach(f=>c[f].f++);
+  });
+  const maxD=Math.max(...Object.values(c).map(x=>x.d));
+  const maxH=Math.max(...Object.values(c).map(x=>x.h));
+  const maxF=Math.max(...Object.values(c).map(x=>x.f));
+  if(maxD>0) Object.entries(c).filter(([,v])=>v.d===maxD).forEach(([p])=>achs.push({pid:parseInt(p),name:'大地主',color:'gold'}));
+  if(maxH>0) Object.entries(c).filter(([,v])=>v.h===maxH).forEach(([p])=>achs.push({pid:parseInt(p),name:'好帮手',color:'purple'}));
+  if(maxF>0) Object.entries(c).filter(([,v])=>v.f===maxF).forEach(([p])=>achs.push({pid:parseInt(p),name:'老农民',color:'green'}));
+  session.players.forEach(p => {
+    let stayed=false;
+    for(let i=1;i<session.rounds.length;i++){if(session.rounds[i].dealerId===p&&session.rounds[i-1].dealerId===p){stayed=true;break;}}
+    if(!stayed&&c[p].d>0) achs.push({pid:p,name:'过客',color:'purple'});
+  });
+  return achs;
+}
+
+// ══════ ROUND FORM ══════
+let roundForm = {};
+function resetRoundForm() {
+  const s = state.currentSession;
+  roundForm = {
+    dealerId: s ? s.currentDealerId : null,
+    helperIds: [],
+    score: 120,
+    heartFiveCaptors: [],
+    diamondFiveCaptors: [],
+    penalties: {},
+  };
+  if (s) s.players.forEach(p => { roundForm.penalties[p] = 0; });
+}
+
+// ══════ RENDER ══════
+function renderAll() {
+  renderHome(); renderRound(); renderStats(); renderSettings();
+  const s = state.currentSession;
+  document.getElementById('sessionIndicator').textContent = s ? ` · R${s.rounds.length+1}` : '';
+}
+
+function pAvatar(pid) {
+  const p = state.players[pid];
+  if (!p) return '';
+  return p.avatar ? `<img src="${p.avatar}">` : ['🐉','🐯','🦊','🐼','🦁','🐻'][pid%6];
+}
+function pName(pid) { return state.players[pid]?.name || `P${pid+1}`; }
+
+// ── HOME ──
+function renderHome() {
+  const el = document.getElementById('homeContent');
+  const s = state.currentSession;
+  if (!s) {
+    el.innerHTML = `
+      <div class="setup-hero"><h1>升级</h1><p>记分 · 分析 · 成就</p></div>
+      <div class="card">
+        <div class="card-title">开始游戏</div>
+        <p style="color:var(--text2);font-size:13px;margin-bottom:14px">六人拖拉机 · 记录每一局的升降级历史</p>
+        <button class="btn btn-primary btn-full" onclick="openSessionSetup()">🀄 新建局</button>
+      </div>
+      ${state.sessions.length>0?`<div class="card"><div class="card-title">历史局</div>${state.sessions.slice(-5).reverse().map(s=>`<div class="stat-row"><div style="flex:1"><div style="font-size:13px">${new Date(s.startTime).toLocaleDateString('zh')}</div><div style="font-size:11px;color:var(--text3)">${s.rounds.length}局</div></div></div>`).join('')}</div>`:''}`;
+    return;
+  }
+  const levelRows = state.players.map(p => {
+    const lk = s.playerLevels[p.id] || START_KEY;
+    const cls = isBasement(lk) ? 'level-b' : lk.startsWith('R1') ? 'level-r1' : 'level-r2';
+    return `<div class="stat-row">
+      <div style="display:flex;align-items:center;gap:8px;flex:1">
+        <div class="player-avatar" style="width:32px;height:32px;font-size:14px">${pAvatar(p.id)}</div>
+        <div><div style="font-size:13px">${p.name}</div><div style="font-size:10px;color:var(--text3)">座位${p.seat+1}</div></div>
+      </div>
+      <span class="level-badge ${cls}">${levelDisplay(lk)}</span>
+    </div>`;
+  }).join('');
+  const sAchs = computeSessionAchievements(s);
+  el.innerHTML = `
+    <div class="card"><div class="card-title">当前级别</div>${levelRows}</div>
+    <div class="card">
+      <div class="card-title">本局进度</div>
+      <div style="display:flex;gap:12px;text-align:center">
+        <div style="flex:1"><div style="font-family:'Playfair Display';font-size:28px;color:var(--accent2)">${s.rounds.length}</div><div style="font-size:11px;color:var(--text3)">局数</div></div>
+        <div style="flex:1;border-left:1px solid var(--border);border-right:1px solid var(--border)"><div style="font-family:'Playfair Display';font-size:28px;color:var(--gold2)">${s.rounds.filter(r=>getScoreResult(r.score).side==='dealer').length}</div><div style="font-size:11px;color:var(--text3)">庄胜</div></div>
+        <div style="flex:1"><div style="font-family:'Playfair Display';font-size:28px;color:var(--green2)">${s.rounds.filter(r=>getScoreResult(r.score).side==='farmer').length}</div><div style="font-size:11px;color:var(--text3)">农胜</div></div>
+      </div>
+      ${sAchs.length>0?`<hr class="divider"><div class="round-achievements">${sAchs.map(a=>`<span class="ach-tag ${a.color}">${a.pid!=null?pName(a.pid)+'·':''}${a.name}</span>`).join('')}</div>`:''}
+    </div>
+    <div class="card"><div class="card-title">最近记录</div>
+      ${s.rounds.length===0?'<div class="empty"><div class="empty-icon">🃏</div>暂无记录</div>':s.rounds.slice(-3).reverse().map((r,i)=>renderRoundItem(r,s.rounds.length-i,s)).join('')}
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn btn-secondary flex-1" onclick="endSession()">结束本局</button>
+      <button class="btn btn-danger flex-1" onclick="if(confirm('确定删除本局？')){state.currentSession=null;saveState();renderAll();showToast('已删除 🗑️');}">删除本局</button>
+    </div>`;
+}
+
+function renderRoundItem(r, num, session) {
+  const result = getScoreResult(r.score);
+  const sc = result.side==='dealer'?'var(--gold2)':result.side==='farmer'?'var(--green2)':'var(--text2)';
+  const helpers = r.helperIds.map(h=>pName(h)).join('、');
+  const achTags = (r.achievements||[]).map(a=>`<span class="ach-tag ${a.color}">${a.pid!=null?pName(a.pid)+'·':''}${a.name}</span>`).join('');
+  return `<div class="round-item" onclick="showRoundDetail(${r.id})">
+    <div class="round-header">
+      <div class="round-num">#${num}</div>
+      <div class="round-roles">庄:${pName(r.dealerId)}${helpers?' 帮:'+helpers:''}</div>
+      <div class="round-score" style="color:${sc}">${r.score}</div>
+    </div>
+    ${achTags?`<div class="round-achievements">${achTags}</div>`:''}
+  </div>`;
+}
+
+// ── ROUND FORM ──
+function renderRound() {
+  const el = document.getElementById('roundContent');
+  const s = state.currentSession;
+  if (!s) { el.innerHTML='<div class="empty"><div class="empty-icon">🎴</div><p>请先在主页创建新局</p></div>'; return; }
+
+  const farmerIds = s.players.filter(p => p !== roundForm.dealerId && !roundForm.helperIds.includes(p));
+
+  const playersHtml = state.players.map(p => {
+    let role='', cls='';
+    if(roundForm.dealerId===p.id){role='庄家';cls='dealer';}
+    else if(roundForm.helperIds.includes(p.id)){role='帮手';cls='helper';}
+    else if(roundForm.dealerId!==null){role='农民';cls='farmer';}
+    return `<div class="player-chip ${cls}" onclick="cycleRole(${p.id})">
+      ${role?`<div class="chip-role">${role}`:''}</div>
+      <div class="player-avatar">${pAvatar(p.id)}</div>
+      <div class="chip-name">${p.name}</div>
+      <div class="chip-level">${levelDisplay(s.playerLevels[p.id]||START_KEY)}</div>
+    </div>`;
+  }).join('');
+
+  const buildCaptorRows = (type, captors) => {
+    if (!captors.length) return '';
+    const selClass = type==='heart'?'sel-heart':'sel-diamond';
+    return captors.map((sel, i) => {
+      const btns = farmerIds.map(fid =>
+        `<button class="mini-player-btn ${sel===fid?selClass:''}" onclick="setCaptor('${type}',${i},${fid})">${pName(fid)}</button>`
+      ).join('');
+      return `<div class="who-captor-row"><span class="who-captor-label">第${i+1}张</span><div class="mini-player-row">${btns}</div></div>`;
+    }).join('');
+  };
+
+  const hc = roundForm.heartFiveCaptors.length, dc = roundForm.diamondFiveCaptors.length;
+  const heartWho = hc>0?`<div class="who-prompt"><strong>♥5 被谁抓住？（共${hc}张）</strong>${buildCaptorRows('heart',roundForm.heartFiveCaptors)}</div>`:'';
+  const diamondWho = dc>0?`<div class="who-prompt"><strong>♦5 被谁抓住？（共${dc}张）</strong>${buildCaptorRows('diamond',roundForm.diamondFiveCaptors)}</div>`:'';
+
+  const penHtml = state.players.map(p => {
+    const cnt = roundForm.penalties[p.id]||0;
+    return `<div class="penalty-row">
+      <div class="penalty-player">${p.name}</div>
+      <button class="counter-btn" onclick="changePenalty(${p.id},-1)">−</button>
+      <div class="penalty-count">${cnt>0?cnt:'—'}</div>
+      <button class="counter-btn" onclick="changePenalty(${p.id},1)">+</button>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="card">
+      <div class="card-title">第 ${s.rounds.length+1} 局 · 分配角色</div>
+      <div class="section-label">点击：空→庄家→帮手(最多2)→清除</div>
+      <div class="players-grid">${playersHtml}</div>
+    </div>
+    <div class="card">
+      <div class="card-title">农民得分</div>
+      <div class="score-display" style="color:${getScoreColor(roundForm.score)}" id="scoreDisp">${roundForm.score}</div>
+      <div class="score-label" id="scoreLabel">${getScoreLabel(roundForm.score)}</div>
+      <div class="slider-wrap">
+        <input type="range" min="0" max="300" step="5" value="${roundForm.score}" oninput="updateScore(this.value)">
+        <div class="score-ticks"><span>0</span><span>60</span><span>120</span><span>180</span><span>240</span><span>300</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">红五 / 方五</div>
+      <div class="red-five-row">
+        <div class="red-five-card ${hc>0?'active-heart':''}">
+          <span class="red-five-suit" style="color:${hc>0?'var(--red2)':'var(--text3)'}">♥</span>
+          <div class="red-five-label">红五 (庄-2级/张)</div>
+          <div class="red-five-counter">
+            <button class="counter-btn" onclick="changeRedFive('heart',-1)">−</button>
+            <span class="rf-count" style="color:${hc>0?'var(--red2)':'var(--text3)'}">${hc}</span>
+            <button class="counter-btn" onclick="changeRedFive('heart',1)">+</button>
+          </div>
+        </div>
+        <div class="red-five-card ${dc>0?'active-diamond':''}">
+          <span class="red-five-suit" style="color:${dc>0?'var(--accent2)':'var(--text3)'}">♦</span>
+          <div class="red-five-label">方五 (庄-1级/张)</div>
+          <div class="red-five-counter">
+            <button class="counter-btn" onclick="changeRedFive('diamond',-1)">−</button>
+            <span class="rf-count" style="color:${dc>0?'var(--accent2)':'var(--text3)'}">${dc}</span>
+            <button class="counter-btn" onclick="changeRedFive('diamond',1)">+</button>
+          </div>
+        </div>
+      </div>
+      ${heartWho}${diamondWho}
+    </div>
+    <div class="card"><div class="card-title">出牌错误罚级</div>${penHtml}</div>
+    <button class="btn btn-primary btn-full" onclick="submitRound()" style="margin-bottom:24px">✓ 确认记录本局</button>`;
+}
+
+// ── STATS ──
+function renderStats() {
+  const el = document.getElementById('statsContent');
+  const sessions = state.currentSession ? [...state.sessions, state.currentSession] : state.sessions;
+  const allRounds = []; sessions.forEach(s => s.rounds.forEach(r => allRounds.push({...r, session:s})));
+  if (!allRounds.length) { el.innerHTML='<div class="empty"><div class="empty-icon">📊</div><p>暂无数据</p></div>'; return; }
+  const tabs=['角色胜率','级别走势','成就榜'];
+  const at = window._statsTab||0;
+  const content = at===0?renderWinRates(allRounds):at===1?renderLevelChart():renderAchStats(allRounds);
+  el.innerHTML=`<div class="inner-tabs">${tabs.map((t,i)=>`<button class="inner-tab ${i===at?'active':''}" onclick="window._statsTab=${i};renderStats()">${t}</button>`).join('')}</div>${content}`;
+}
+
+function renderWinRates(allRounds) {
+  const s={}; state.players.forEach(p=>s[p.id]={dW:0,dT:0,hW:0,hT:0,fW:0,fT:0});
+  allRounds.forEach(r=>{
+    const res=getScoreResult(r.score);
+    const fIds=r.session.players.filter(p=>p!==r.dealerId&&!r.helperIds.includes(p));
+    const dW=res.side==='dealer',fW=res.side==='farmer';
+    const ds=s[r.dealerId];if(ds){ds.dT++;if(dW)ds.dW++;}
+    r.helperIds.forEach(h=>{if(s[h]){s[h].hT++;if(dW)s[h].hW++;}});
+    fIds.forEach(f=>{if(s[f]){s[f].fT++;if(fW)s[f].fW++;}});
+  });
+  const pct=(w,t)=>t===0?'—':Math.round(w/t*100)+'%';
+  return ['庄家','帮手','农民'].map((label,i)=>{
+    const [wk,tk]=[['dW','dT'],['hW','hT'],['fW','fT']][i];
+    return `<div class="card"><div class="card-title">${label}胜率</div>${state.players.map(p=>`<div class="stat-row"><div style="flex:1;font-size:13px">${p.name}</div><div style="font-size:11px;color:var(--text3);margin-right:8px">${s[p.id][wk]}/${s[p.id][tk]}</div><div style="font-family:'Playfair Display';font-size:16px;color:var(--accent2)">${pct(s[p.id][wk],s[p.id][tk])}</div></div>`).join('')}</div>`;
+  }).join('');
+}
+
+function renderLevelChart() {
+  const s=state.currentSession;
+  if(!s||!s.rounds.length) return '<div class="empty"><div class="empty-icon">📈</div><p>本局暂无数据</p></div>';
+  const colors=['#c8954a','#8b6aaa','#5aaa7a','#d95f5f','#5a9fd4','#d4af6a'];
+  const W=Math.max(400,s.rounds.length*48+80),H=180,pad=40,chartH=H-36;
+  const history=[{...s.initialLevels}];
+  let cur={...s.initialLevels};
+  s.rounds.forEach(r=>{const c=computeLevelChanges(r,s);cur=applyLevelChanges(s,c);history.push({...cur});});
+  const allKeys=new Set();history.forEach(h=>Object.values(h).forEach(k=>allKeys.add(k)));
+  const sortedKeys=[...allKeys].sort((a,b)=>keyIndex(a)-keyIndex(b));
+  const yOf=k=>{const i=sortedKeys.indexOf(k);return chartH-(i/Math.max(sortedKeys.length-1,1))*(chartH-20)+8;};
+  const xOf=i=>pad+i*(W-pad*2)/Math.max(history.length-1,1);
+  const paths=state.players.map((p,pi)=>{
+    const pts=history.map((h,i)=>`${xOf(i)},${yOf(h[p.id]||START_KEY)}`);
+    const dots=history.map((h,i)=>`<circle cx="${xOf(i)}" cy="${yOf(h[p.id]||START_KEY)}" r="3" fill="${colors[pi]}"/>`).join('');
+    return `<polyline points="${pts.join(' ')}" fill="none" stroke="${colors[pi]}" stroke-width="2" opacity=".85"/>${dots}`;
+  }).join('');
+  const legend=state.players.map((p,pi)=>`<text x="12" y="${14+pi*14}" fill="${colors[pi]}" font-size="10" font-family="Noto Sans SC">${p.name}</text>`).join('');
+  const xLabels=history.map((_,i)=>i>0?`<text x="${xOf(i)}" y="${H-2}" fill="var(--text3)" font-size="9" text-anchor="middle">#${i}</text>`:'').join('');
+  return `<div class="card"><div class="card-title">级别走势（本局）</div><div class="level-chart"><svg width="${W}" height="${H}" style="overflow:visible">${paths}${legend}${xLabels}</svg></div></div>`;
+}
+
+function renderAchStats(allRounds) {
+  const ac={};state.players.forEach(p=>ac[p.id]={});
+  allRounds.forEach(r=>{(r.achievements||[]).forEach(a=>{if(a.pid!=null){if(!ac[a.pid])ac[a.pid]={};ac[a.pid][a.name]=(ac[a.pid][a.name]||0)+1;}});});
+  return state.players.map(p=>{
+    const entries=Object.entries(ac[p.id]||{}).sort((a,b)=>b[1]-a[1]);
+    if(!entries.length) return '';
+    return `<div class="card"><div class="card-title">${p.name}</div>${entries.map(([name,cnt])=>`<div class="stat-row"><div style="flex:1;font-size:13px">${name}</div><div style="font-family:'Playfair Display';font-size:16px;color:var(--accent2)">${cnt}</div></div>`).join('')}</div>`;
+  }).join('');
+}
+
+// ── SETTINGS ──
+function renderSettings() {
+  const el = document.getElementById('settingsContent');
+  el.innerHTML = `
+    <div class="card">
+      <div class="card-title">玩家信息 & 座位</div>
+      <p style="font-size:11px;color:var(--text3);margin-bottom:10px">长按拖动 ≡ 调整座位顺序（顺时针）</p>
+      <div class="seat-list" id="seatList">${renderSeatItems()}</div>
+      <input type="file" id="avatarInput" accept="image/*" style="display:none" onchange="handleAvatarUpload(event)">
+    </div>
+    <div class="card">
+      <div class="card-title">数据管理</div>
+      <div style="display:flex;gap:8px;flex-direction:column">
+        <button class="btn btn-secondary btn-full" onclick="exportData()">📤 导出存档 (JSON)</button>
+        <label class="btn btn-secondary btn-full" style="cursor:pointer">📥 导入存档
+          <input type="file" accept=".json" style="display:none" onchange="importData(this.files[0])">
+        </label>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">关于</div>
+      <p style="font-size:12px;color:var(--text3);line-height:1.7">升级记分册 v3.0<br>六人拖拉机 · 记录 · 统计 · 成就<br>添加到主屏幕以获得最佳体验</p>
+    </div>`;
+  initDragDrop();
+}
+
+function renderSeatItems() {
+  // Sort players by current seat order
+  const sorted = [...state.players].sort((a,b) => a.seat - b.seat);
+  return sorted.map(p => `
+    <div class="seat-item" draggable="true" data-pid="${p.id}" id="si-${p.id}">
+      <span class="drag-handle">≡</span>
+      <span class="seat-num">座位 ${p.seat+1}</span>
+      <div class="seat-avatar" onclick="uploadAvatar(${p.id})">${p.avatar?`<img src="${p.avatar}">`:['🐉','🐯','🦊','🐼','🦁','🐻'][p.id%6]}</div>
+      <div class="seat-name">
+        <input type="text" value="${p.name}" placeholder="昵称" onchange="updatePlayerName(${p.id},this.value)" style="padding:6px 10px;font-size:13px">
+      </div>
+    </div>`).join('');
+}
+
+// ── DRAG & DROP for seats ──
+let dragSrc = null;
+function initDragDrop() {
+  const list = document.getElementById('seatList');
+  if (!list) return;
+  list.querySelectorAll('.seat-item').forEach(item => {
+    item.addEventListener('dragstart', e => {
+      dragSrc = item;
+      item.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    item.addEventListener('dragend', () => {
+      item.classList.remove('dragging');
+      list.querySelectorAll('.seat-item').forEach(i => i.classList.remove('drag-over'));
+    });
+    item.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (item !== dragSrc) {
+        list.querySelectorAll('.seat-item').forEach(i => i.classList.remove('drag-over'));
+        item.classList.add('drag-over');
+      }
+    });
+    item.addEventListener('drop', e => {
+      e.preventDefault();
+      if (dragSrc && dragSrc !== item) {
+        // Reorder seats
+        const srcPid = parseInt(dragSrc.dataset.pid);
+        const dstPid = parseInt(item.dataset.pid);
+        const srcPlayer = state.players.find(p => p.id === srcPid);
+        const dstPlayer = state.players.find(p => p.id === dstPid);
+        // Swap seats
+        const tmpSeat = srcPlayer.seat;
+        srcPlayer.seat = dstPlayer.seat;
+        dstPlayer.seat = tmpSeat;
+        saveState();
+        renderSettings();
+      }
+    });
+  });
+}
+
+// ══════ ACTIONS ══════
+function showPage(name, tab) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  if(tab) tab.classList.add('active');
+  if(name==='round'){resetRoundForm();renderRound();}
+  else if(name==='stats') renderStats();
+  else if(name==='home') renderHome();
+  else if(name==='settings') renderSettings();
+}
+
+function openSessionSetup() {
+  const c = document.getElementById('setupFirstDealer');
+  const sorted = [...state.players].sort((a,b)=>a.seat-b.seat);
+  c.innerHTML = sorted.map(p=>`<div class="radio-btn" onclick="selectFirstDealer(${p.id},this)">${p.name}</div>`).join('');
+  window._setupFirstDealer = sorted[0].id;
+  c.querySelector('.radio-btn').classList.add('selected');
+  openModal('modalSessionSetup');
+}
+function selectFirstDealer(id, el) {
+  window._setupFirstDealer = id;
+  document.querySelectorAll('#setupFirstDealer .radio-btn').forEach(b=>b.classList.remove('selected'));
+  el.classList.add('selected');
+}
+function startSession() {
+  const endLevel = document.getElementById('setupEndLevel').value;
+  const endRound = document.getElementById('setupEndRound').value;
+  const endKey = endRound + ':' + endLevel;
+  const initialLevels = {};
+  state.players.forEach(p => initialLevels[p.id] = START_KEY);
+  state.currentSession = {
+    id: Date.now(), startTime: Date.now(),
+    endKey,
+    currentDealerId: window._setupFirstDealer ?? state.players[0].id,
+    players: state.players.map(p=>p.id),
+    playerLevels: {...initialLevels},
+    initialLevels: {...initialLevels},
+    rounds: []
+  };
+  saveState(); closeModal('modalSessionSetup'); resetRoundForm(); renderAll(); showToast('新局开始！🀄');
+}
+
+function cycleRole(pid) {
+  if(roundForm.dealerId===null){roundForm.dealerId=pid;}
+  else if(roundForm.dealerId===pid){roundForm.dealerId=null;roundForm.helperIds=roundForm.helperIds.filter(h=>h!==pid);}
+  else if(roundForm.helperIds.includes(pid)){roundForm.helperIds=roundForm.helperIds.filter(h=>h!==pid);}
+  else if(roundForm.helperIds.length<2){roundForm.helperIds.push(pid);}
+  renderRound();
+}
+
+function updateScore(val) {
+  roundForm.score=parseInt(val);
+  document.getElementById('scoreDisp').textContent=roundForm.score;
+  document.getElementById('scoreDisp').style.color=getScoreColor(roundForm.score);
+  document.getElementById('scoreLabel').textContent=getScoreLabel(roundForm.score);
+}
+
+function changeRedFive(type, delta) {
+  const arr = type==='heart'?'heartFiveCaptors':'diamondFiveCaptors';
+  const newCount = Math.max(0, Math.min(3, roundForm[arr].length + delta));
+  roundForm[arr] = roundForm[arr].slice(0, newCount);
+  while(roundForm[arr].length < newCount) roundForm[arr].push(null);
+  renderRound();
+}
+
+function setCaptor(type, idx, pid) {
+  const arr = type==='heart'?'heartFiveCaptors':'diamondFiveCaptors';
+  roundForm[arr][idx] = pid;
+  renderRound();
+}
+
+function changePenalty(pid, delta) {
+  roundForm.penalties[pid] = Math.max(0, (roundForm.penalties[pid]||0) + delta);
+  renderRound();
+}
+
+function submitRound() {
+  const s = state.currentSession; if(!s) return;
+  if(roundForm.dealerId===null){showToast('请选择庄家 ❌');return;}
+  if(roundForm.heartFiveCaptors.some(c=>c===null)){showToast('请选择所有♥5的抓牌者 ❌');return;}
+  if(roundForm.diamondFiveCaptors.some(c=>c===null)){showToast('请选择所有♦5的抓牌者 ❌');return;}
+
+  const levelsBefore = {...s.playerLevels};
+  const rd = {
+    dealerId:roundForm.dealerId, helperIds:[...roundForm.helperIds],
+    score:roundForm.score, heartFiveCaptors:[...roundForm.heartFiveCaptors],
+    diamondFiveCaptors:[...roundForm.diamondFiveCaptors], penalties:{...roundForm.penalties}
+  };
+  const changes = computeLevelChanges(rd, s);
+  const levelsAfter = applyLevelChanges(s, changes);
+  const achievements = computeAchievements(rd, s, levelsBefore, levelsAfter);
+  const round = {...rd, id:s.rounds.length, achievements, levelsBefore, levelsAfter, changes, timestamp:Date.now()};
+  s.rounds.push(round); s.playerLevels = levelsAfter;
+
+  // Advance dealer
+  const result = getScoreResult(roundForm.score);
+  if(result.side !== 'dealer') {
+    const sorted = [...state.players].sort((a,b)=>a.seat-b.seat);
+    const ci = sorted.findIndex(p=>p.id===roundForm.dealerId);
+    s.currentDealerId = sorted[(ci+1)%sorted.length].id;
+  } else { s.currentDealerId = roundForm.dealerId; }
+
+  // Check session end
+  let ended = false;
+  state.players.forEach(p => { if((levelsAfter[p.id]||'')===s.endKey) ended=true; });
+
+  saveState(); resetRoundForm();
+  if(ended){endSession();showToast('🎊 达到终局条件！');}
+  else{showToast(`✅ 已记录第${s.rounds.length}局`);}
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page-home').classList.add('active');
+  document.querySelectorAll('.nav-tab')[0].classList.add('active');
+  renderHome();
+}
+
+function endSession() {
+  if(!state.currentSession) return;
+  state.sessions.push({...state.currentSession});
+  state.currentSession=null; saveState(); renderAll(); showToast('本局已存档 📚');
+}
+
+function showRoundDetail(roundId) {
+  const s=state.currentSession;if(!s)return;
+  const r=s.rounds.find(r=>r.id===roundId);if(!r)return;
+  const result=getScoreResult(r.score);
+  const bannerCls=result.side==='dealer'?'dealer-win':result.side==='farmer'?'farmer-win':'no-change';
+  const bannerTitle=result.side==='dealer'?'庄家方胜利':result.side==='farmer'?'农民方胜利':'平局';
+  const helpers=r.helperIds.map(h=>pName(h)).join('、')||'无';
+  const farmers=s.players.filter(p=>p!==r.dealerId&&!r.helperIds.includes(p)).map(p=>pName(p)).join('、');
+  const levelRows=s.players.map(pid=>{
+    const before=r.levelsBefore[pid];const after=r.levelsAfter[pid];const delta=r.changes[pid];
+    const arrow=delta>0?`<span style="color:var(--green2)">▲${delta}</span>`:delta<0?`<span style="color:var(--red2)">▼${Math.abs(delta)}</span>`:`<span style="color:var(--text3)">—</span>`;
+    return `<div class="stat-row"><div style="flex:1;font-size:13px">${pName(pid)}</div><div style="font-size:12px;color:var(--text3);margin-right:6px">${levelDisplay(before)}→${levelDisplay(after)}</div>${arrow}</div>`;
+  }).join('');
+  const achTags=(r.achievements||[]).map(a=>`<span class="ach-tag ${a.color}">${a.pid!=null?pName(a.pid)+'·':''}${a.name}</span>`).join('')||'<span style="color:var(--text3);font-size:12px">无成就</span>';
+  document.getElementById('roundDetailContent').innerHTML=`
+    <div class="modal-title">第 ${roundId+1} 局详情</div>
+    <div class="result-banner ${bannerCls}"><div class="result-title">${bannerTitle}</div><div class="result-detail">农民得分：${r.score}</div></div>
+    <div class="card-title">人员</div>
+    <div style="font-size:13px;margin-bottom:12px">庄家：${pName(r.dealerId)}<br>帮手：${helpers}<br>农民：${farmers}</div>
+    <div class="card-title">级别变化</div>${levelRows}
+    <div class="card-title" style="margin-top:12px">成就</div>
+    <div class="round-achievements" style="margin-bottom:16px">${achTags}</div>
+    <button class="btn btn-danger btn-sm" onclick="editRound(${roundId})">✏️ 编辑本局</button>`;
+  openModal('modalRoundDetail');
+}
+
+function editRound(roundId) {
+  const s=state.currentSession;if(!s)return;
+  const r=s.rounds.find(r=>r.id===roundId);if(!r)return;
+  s.playerLevels={...r.levelsBefore};
+  s.rounds=s.rounds.slice(0,roundId);
+  roundForm.dealerId=r.dealerId;
+  roundForm.helperIds=[...r.helperIds];
+  roundForm.score=r.score;
+  roundForm.heartFiveCaptors=[...(r.heartFiveCaptors||[])];
+  roundForm.diamondFiveCaptors=[...(r.diamondFiveCaptors||[])];
+  roundForm.penalties={...r.penalties};
+  closeModal('modalRoundDetail'); saveState(); renderRound();
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page-round').classList.add('active');
+  document.querySelectorAll('.nav-tab')[1].classList.add('active');
+  showToast('正在编辑 ✏️');
+}
+
+function updatePlayerName(pid, name) { state.players[pid].name=name; saveState(); }
+let _avatarPid=null;
+function uploadAvatar(pid) { _avatarPid=pid; document.getElementById('avatarInput').click(); }
+function handleAvatarUpload(e) {
+  const file=e.target.files[0];if(!file||_avatarPid===null)return;
+  const r=new FileReader();
+  r.onload=ev=>{state.players[_avatarPid].avatar=ev.target.result;saveState();renderSettings();renderHome();showToast('头像已更新 ✅');};
+  r.readAsDataURL(file);
+}
+
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');}));
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
+
+loadState();
+resetRoundForm();
+renderAll();
+</script>
+</body>
+</html>
