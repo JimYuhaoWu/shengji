@@ -412,17 +412,18 @@ function computeAchievements(round, session, levelsBefore, levelsAfter) {
     if (cnt > 0 && keyIndex(levelsAfter[pid]) >= keyIndex(levelsBefore[pid])) ach('虚惊一场', 'purple', pid);
   });
 
-  // Dealer streak
+  // Dealer streak milestones: award exactly once at streak lengths 3,5,7,9
   if (result.side === 'dealer') {
     let streak = 1;
     for (let i = session.rounds.length - 1; i >= 0; i--) {
       if (session.rounds[i].dealerId === dealerId) streak++;
       else break;
     }
-    if (streak >= 9) ach('我要验牌', 'gold', dealerId);
-    else if (streak >= 7) ach('一个人玩儿得了', 'gold', dealerId);
-    else if (streak >= 5) ach('不倒翁', 'gold', dealerId);
-    else if (streak >= 3) ach('房东收租', 'gold', dealerId);
+    // Only award the achievement for the exact milestone round, not every round above it
+    if (streak === 9) ach('我要验牌', 'gold', dealerId);
+    else if (streak === 7) ach('一个人玩儿得了', 'gold', dealerId);
+    else if (streak === 5) ach('不倒翁', 'gold', dealerId);
+    else if (streak === 3) ach('房东收租', 'gold', dealerId);
   }
 
   // Redemption arc
@@ -449,10 +450,14 @@ function computeSessionAchievements(session) {
   if(maxD>0) Object.entries(c).filter(([,v])=>v.d===maxD).forEach(([p])=>achs.push({pid:parseInt(p),name:'大地主',color:'gold'}));
   if(maxH>0) Object.entries(c).filter(([,v])=>v.h===maxH).forEach(([p])=>achs.push({pid:parseInt(p),name:'好帮手',color:'purple'}));
   if(maxF>0) Object.entries(c).filter(([,v])=>v.f===maxF).forEach(([p])=>achs.push({pid:parseInt(p),name:'老农民',color:'green'}));
+  // 过客: was Dealer at least once but never stayed consecutive — Dealer role only
   session.players.forEach(p => {
+    if (c[p].d === 0) return; // never was dealer, skip
     let stayed=false;
-    for(let i=1;i<session.rounds.length;i++){if(session.rounds[i].dealerId===p&&session.rounds[i-1].dealerId===p){stayed=true;break;}}
-    if(!stayed&&c[p].d>0) achs.push({pid:p,name:'过客',color:'purple'});
+    for(let i=1;i<session.rounds.length;i++){
+      if(session.rounds[i].dealerId===p && session.rounds[i-1].dealerId===p){stayed=true;break;}
+    }
+    if(!stayed) achs.push({pid:p,name:'过客',color:'purple'});
   });
   return achs;
 }
@@ -811,43 +816,123 @@ function renderStats() {
 }
 
 function renderWinRates(allRounds) {
-  const s={}; state.players.forEach(p=>s[p.id]={dW:0,dT:0,hW:0,hT:0,fW:0,fT:0});
+  const s={};
+  state.players.forEach(p=>s[p.id]={dW:0,dT:0,dScore:0,hW:0,hT:0,hScore:0,fW:0,fT:0,fScore:0});
   allRounds.forEach(r=>{
     const res=getScoreResult(r.score);
     const fIds=r.session.players.filter(p=>p!==r.dealerId&&!r.helperIds.includes(p));
     const dW=res.side==='dealer',fW=res.side==='farmer';
-    const ds=s[r.dealerId];if(ds){ds.dT++;if(dW)ds.dW++;}
-    r.helperIds.forEach(h=>{if(s[h]){s[h].hT++;if(dW)s[h].hW++;}});
-    fIds.forEach(f=>{if(s[f]){s[f].fT++;if(fW)s[f].fW++;}});
+    const ds=s[r.dealerId];
+    if(ds){ds.dT++;if(dW)ds.dW++;ds.dScore+=r.score;}
+    r.helperIds.forEach(h=>{if(s[h]){s[h].hT++;if(dW)s[h].hW++;s[h].hScore+=r.score;}});
+    fIds.forEach(f=>{if(s[f]){s[f].fT++;if(fW)s[f].fW++;s[f].fScore+=r.score;}});
   });
   const pct=(w,t)=>t===0?'—':Math.round(w/t*100)+'%';
-  return ['庄家','帮手','农民'].map((label,i)=>{
-    const [wk,tk]=[['dW','dT'],['hW','hT'],['fW','fT']][i];
-    return `<div class="card"><div class="card-title">${label}胜率</div>${state.players.map(p=>`<div class="stat-row"><div style="flex:1;font-size:13px">${p.name}</div><div style="font-size:11px;color:var(--text3);margin-right:8px">${s[p.id][wk]}/${s[p.id][tk]}</div><div style="font-family:'Playfair Display';font-size:16px;color:var(--accent2)">${pct(s[p.id][wk],s[p.id][tk])}</div></div>`).join('')}</div>`;
-  }).join('');
+  const avg=(score,t)=>t===0?'—':Math.round(score/t)+'';
+
+  const makeCard = (label, wk, tk, sk) => `
+    <div class="card">
+      <div class="card-title">${label}</div>
+      <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 12px;align-items:center">
+        <div style="font-size:10px;color:var(--text3)">玩家</div>
+        <div style="font-size:10px;color:var(--text3);text-align:right">胜率</div>
+        <div style="font-size:10px;color:var(--text3);text-align:right">W/T</div>
+        <div style="font-size:10px;color:var(--text3);text-align:right">均分</div>
+        ${state.players.map(p=>`
+        <div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-top:1px solid var(--border)">
+          <div class="player-avatar" style="width:24px;height:24px;font-size:11px;flex-shrink:0">${pAvatar(p.id)}</div>
+          <span style="font-size:13px">${p.name}</span>
+        </div>
+        <div style="font-family:'Playfair Display';font-size:15px;color:var(--accent2);text-align:right;border-top:1px solid var(--border);padding:6px 0">${pct(s[p.id][wk],s[p.id][tk])}</div>
+        <div style="font-size:11px;color:var(--text3);text-align:right;border-top:1px solid var(--border);padding:6px 0">${s[p.id][wk]}/${s[p.id][tk]}</div>
+        <div style="font-family:'Playfair Display';font-size:15px;color:var(--gold2);text-align:right;border-top:1px solid var(--border);padding:6px 0">${avg(s[p.id][sk],s[p.id][tk])}</div>
+        `).join('')}
+      </div>
+    </div>`;
+
+  return makeCard('庄家','dW','dT','dScore') +
+         makeCard('帮手','hW','hT','hScore') +
+         makeCard('农民','fW','fT','fScore');
 }
+
 
 function renderLevelChart() {
   const s=state.currentSession;
   if(!s||!s.rounds.length) return '<div class="empty"><div class="empty-icon">📈</div><p>本局暂无数据</p></div>';
   const colors=['#c8954a','#8b6aaa','#5aaa7a','#d95f5f','#5a9fd4','#d4af6a'];
-  const W=Math.max(400,s.rounds.length*48+80),H=180,pad=40,chartH=H-36;
+  const PAD_L=64, PAD_R=100, PAD_T=16, PAD_B=28;
+  const W=Math.max(420, s.rounds.length*52+PAD_L+PAD_R);
+  const H=220;
+  const chartW=W-PAD_L-PAD_R, chartH=H-PAD_T-PAD_B;
+
+  // Build history snapshots
   const history=[{...s.initialLevels}];
   let cur={...s.initialLevels};
   s.rounds.forEach(r=>{const c=computeLevelChanges(r,s);cur=applyLevelChanges(s,c);history.push({...cur});});
-  const allKeys=new Set();history.forEach(h=>Object.values(h).forEach(k=>allKeys.add(k)));
+
+  // All level keys that appear, sorted
+  const allKeys=new Set();
+  history.forEach(h=>Object.values(h).forEach(k=>allKeys.add(k)));
   const sortedKeys=[...allKeys].sort((a,b)=>keyIndex(a)-keyIndex(b));
-  const yOf=k=>{const i=sortedKeys.indexOf(k);return chartH-(i/Math.max(sortedKeys.length-1,1))*(chartH-20)+8;};
-  const xOf=i=>pad+i*(W-pad*2)/Math.max(history.length-1,1);
+  const nKeys=sortedKeys.length;
+
+  const yOf=k=>{
+    const i=sortedKeys.indexOf(k);
+    return PAD_T + chartH - (i/Math.max(nKeys-1,1))*chartH;
+  };
+  const xOf=i=>PAD_L + (i/Math.max(history.length-1,1))*chartW;
+
+  // Y-axis grid lines and labels
+  const gridLines = sortedKeys.map(k=>{
+    const y=yOf(k);
+    return `<line x1="${PAD_L}" y1="${y}" x2="${PAD_L+chartW}" y2="${y}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3,4"/>
+            <text x="${PAD_L-6}" y="${y+4}" fill="var(--text3)" font-size="9" text-anchor="end" font-family="Noto Sans SC">${levelDisplay(k)}</text>`;
+  }).join('');
+
+  // X-axis round labels
+  const xLabels=history.map((_,i)=>i>0?
+    `<text x="${xOf(i)}" y="${H-4}" fill="var(--text3)" font-size="9" text-anchor="middle">#${i}</text>`:''
+  ).join('');
+
+  // Player lines + dots
   const paths=state.players.map((p,pi)=>{
     const pts=history.map((h,i)=>`${xOf(i)},${yOf(h[p.id]||START_KEY)}`);
-    const dots=history.map((h,i)=>`<circle cx="${xOf(i)}" cy="${yOf(h[p.id]||START_KEY)}" r="3" fill="${colors[pi]}"/>`).join('');
-    return `<polyline points="${pts.join(' ')}" fill="none" stroke="${colors[pi]}" stroke-width="2" opacity=".85"/>${dots}`;
+    const dots=history.map((h,i)=>`<circle cx="${xOf(i)}" cy="${yOf(h[p.id]||START_KEY)}" r="${i===history.length-1?5:3}" fill="${colors[pi]}" stroke="${i===history.length-1?'var(--bg2)':'none'}" stroke-width="2"/>`).join('');
+    return `<polyline points="${pts.join(' ')}" fill="none" stroke="${colors[pi]}" stroke-width="2.5" stroke-linejoin="round" opacity=".9"/>${dots}`;
   }).join('');
-  const legend=state.players.map((p,pi)=>`<text x="12" y="${14+pi*14}" fill="${colors[pi]}" font-size="10" font-family="Noto Sans SC">${p.name}</text>`).join('');
-  const xLabels=history.map((_,i)=>i>0?`<text x="${xOf(i)}" y="${H-2}" fill="var(--text3)" font-size="9" text-anchor="middle">#${i}</text>`:'').join('');
-  return `<div class="card"><div class="card-title">级别走势（本局）</div><div class="level-chart"><svg width="${W}" height="${H}" style="overflow:visible">${paths}${legend}${xLabels}</svg></div></div>`;
+
+  // Current level labels on right side (sorted by current level desc to avoid overlap)
+  const currentLabels = state.players
+    .map((p,pi)=>({p,pi,lk:cur[p.id]||START_KEY,y:yOf(cur[p.id]||START_KEY)}))
+    .sort((a,b)=>b.y-a.y);
+  // Nudge labels that are too close
+  for(let i=1;i<currentLabels.length;i++){
+    if(currentLabels[i-1].y - currentLabels[i].y < 13)
+      currentLabels[i].y = currentLabels[i-1].y - 13;
+  }
+  const rightLabels = currentLabels.map(({p,pi,lk,y})=>
+    `<text x="${PAD_L+chartW+8}" y="${y+4}" fill="${colors[pi]}" font-size="10" font-family="Noto Sans SC" font-weight="600">${p.name}</text>`
+  ).join('');
+
+  // Legend at top
+  const legend=state.players.map((p,pi)=>
+    `<text x="${PAD_L + pi*Math.floor(chartW/6)}" y="10" fill="${colors[pi]}" font-size="9" font-family="Noto Sans SC">● ${p.name}</text>`
+  ).join('');
+
+  return `<div class="card">
+    <div class="card-title">级别走势（本局）</div>
+    <div class="level-chart">
+      <svg width="${W}" height="${H}" style="overflow:visible;display:block">
+        ${gridLines}
+        ${paths}
+        ${xLabels}
+        ${rightLabels}
+        ${legend}
+      </svg>
+    </div>
+  </div>`;
 }
+
 
 function renderAchStats(allRounds) {
   const ac={};state.players.forEach(p=>ac[p.id]={});
