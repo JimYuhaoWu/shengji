@@ -168,9 +168,9 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
           <option value="K">K</option><option value="A" selected>A</option>
         </select></div>
         <div class="flex-1"><select id="setupEndRound">
-          <option value="B3">地下室3</option><option value="B2">地下室2</option>
-          <option value="B1">地下室1</option><option value="R1" selected>第一轮</option>
+          <option value="R1" selected>第一轮</option>
           <option value="R2">第二轮</option><option value="R3">第三轮</option>
+          <option value="R4">第四轮</option><option value="R5">第五轮</option>
         </select></div>
       </div>
     </div>
@@ -198,7 +198,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 
 const LEVEL_NAMES = ['2','4','6','7','8','9','10','J','Q','K','A']; // 11 levels
 const REGULAR_ROUNDS = ['R1','R2','R3','R4','R5'];
-const BASEMENT_ROUNDS = ['B1','B2','B3','B4','B5']; // B1 closest to surface
+const BASEMENT_ROUNDS = ['B1','B2','B3','B4','B5','B6','B7','B8','B9','B10']; // B1 closest to surface
 
 // Build flat sequence
 function buildSequence() {
@@ -358,18 +358,31 @@ function computeAchievements(round, session, levelsBefore, levelsAfter) {
   const achs = [];
   const ach = (name, color, pid=null) => achs.push({name, color, pid});
 
-  if (score === 0) ach('大光头', 'red');
-  else if (score <= 59) ach('小光头', 'red');
-  if (score >= 300) ach('超级跳', 'green');
-  else if (score >= 240) ach('大跳', 'green');
-  else if (score >= 180) ach('小跳', 'green');
+  // Fix 1: Score achievements assigned to winning side players
+  if (score === 0) {
+    dealerSide.forEach(pid => ach('大光头', 'red', pid));
+  } else if (score <= 59) {
+    dealerSide.forEach(pid => ach('小光头', 'red', pid));
+  }
+  if (score >= 300) {
+    farmerIds.forEach(pid => ach('超级跳', 'green', pid));
+  } else if (score >= 240) {
+    farmerIds.forEach(pid => ach('大跳', 'green', pid));
+  } else if (score >= 180) {
+    farmerIds.forEach(pid => ach('小跳', 'green', pid));
+  }
 
+  // Red five captures — credited to captor
   (heartFiveCaptors||[]).forEach(pid => ach('抓住红五♥', 'red', pid));
   (diamondFiveCaptors||[]).forEach(pid => ach('抓住方五♦', 'gold', pid));
 
+  // 坏了坏了: dealer side lost AND red five captured — assigned to all dealer side
   const rfCaptured = (heartFiveCaptors||[]).length + (diamondFiveCaptors||[]).length > 0;
-  if (rfCaptured && result.side !== 'dealer') ach('坏了坏了', 'red');
+  if (rfCaptured && result.side !== 'dealer') {
+    dealerSide.forEach(pid => ach('坏了坏了', 'red', pid));
+  }
 
+  // Team composition
   if (helperIds.length === 0) {
     ach('How dare you?', 'purple', dealerId);
     if (result.side === 'dealer') ach('Lone Wolf', 'gold', dealerId);
@@ -378,12 +391,14 @@ function computeAchievements(round, session, levelsBefore, levelsAfter) {
     ach('浪漫双人车乘客', 'purple', helperIds[0]);
   }
 
+  // Fix 2: 虚惊一场 — got penalty but did NOT level down (includes no change AND level up)
   Object.entries(penalties||{}).forEach(([pidStr, cnt]) => {
     const pid = parseInt(pidStr);
     if (cnt >= 2) ach('手残党', 'red', pid);
-    if (cnt > 0 && levelsBefore[pid] === levelsAfter[pid]) ach('虚惊一场', 'purple', pid);
+    if (cnt > 0 && keyIndex(levelsAfter[pid]) >= keyIndex(levelsBefore[pid])) ach('虚惊一场', 'purple', pid);
   });
 
+  // Dealer streak
   if (result.side === 'dealer') {
     let streak = 1;
     for (let i = session.rounds.length - 1; i >= 0; i--) {
@@ -396,6 +411,7 @@ function computeAchievements(round, session, levelsBefore, levelsAfter) {
     else if (streak >= 3) ach('房东收租', 'gold', dealerId);
   }
 
+  // Redemption arc
   session.players.forEach(pid => {
     const before = levelsBefore[pid]||'';
     const after = levelsAfter[pid]||'';
