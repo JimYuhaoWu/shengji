@@ -106,11 +106,12 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 .inner-tab.active{background:var(--bg);color:var(--text)}
 /* Seat drag */
 .seat-list{display:flex;flex-direction:column;gap:8px}
-.seat-item{display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--bg3);border-radius:var(--radius2);border:1px solid var(--border);cursor:grab;user-select:none;transition:background .2s}
-.seat-item.dragging{opacity:.5;background:var(--bg4)}
-.seat-item.drag-over{border-color:var(--accent);background:rgba(200,149,74,.06)}
-.drag-handle{color:var(--text3);font-size:18px;flex-shrink:0;cursor:grab}
+.seat-item{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg3);border-radius:var(--radius2);border:1px solid var(--border);transition:background .2s}
 .seat-num{font-size:11px;color:var(--text3);min-width:36px}
+.seat-move-btns{display:flex;flex-direction:column;gap:3px;flex-shrink:0}
+.seat-move-btn{width:26px;height:22px;border-radius:5px;border:1px solid var(--border2);background:var(--bg4);color:var(--text2);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.seat-move-btn:hover{border-color:var(--accent);color:var(--accent)}
+.seat-move-btn:disabled{opacity:.2;cursor:not-allowed}
 .seat-avatar{width:36px;height:36px;border-radius:50%;background:var(--bg4);display:flex;align-items:center;justify-content:center;font-size:16px;overflow:hidden;flex-shrink:0}
 .seat-avatar img{width:100%;height:100%;object-fit:cover}
 .seat-name{flex:1;font-size:13px}
@@ -673,7 +674,7 @@ function renderSettings() {
   el.innerHTML = `
     <div class="card">
       <div class="card-title">玩家信息 & 座位</div>
-      <p style="font-size:11px;color:var(--text3);margin-bottom:10px">长按拖动 ≡ 调整座位顺序（顺时针）</p>
+      <p style="font-size:11px;color:var(--text3);margin-bottom:10px">用 ▲▼ 调整座位顺序（出牌顺序）</p>
       <div class="seat-list" id="seatList">${renderSeatItems()}</div>
       <input type="file" id="avatarInput" accept="image/*" style="display:none" onchange="handleAvatarUpload(event)">
     </div>
@@ -694,60 +695,35 @@ function renderSettings() {
 }
 
 function renderSeatItems() {
-  // Sort players by current seat order
   const sorted = [...state.players].sort((a,b) => a.seat - b.seat);
-  return sorted.map(p => `
-    <div class="seat-item" draggable="true" data-pid="${p.id}" id="si-${p.id}">
-      <span class="drag-handle">≡</span>
-      <span class="seat-num">座位 ${p.seat+1}</span>
-      <div class="seat-avatar" onclick="uploadAvatar(${p.id})">${p.avatar?`<img src="${p.avatar}">`:['🐉','🐯','🦊','🐼','🦁','🐻'][p.id%6]}</div>
-      <div class="seat-name">
-        <input type="text" value="${p.name}" placeholder="昵称" onchange="updatePlayerName(${p.id},this.value)" style="padding:6px 10px;font-size:13px">
+  const n = sorted.length;
+  return sorted.map((p, i) => {
+    const av = p.avatar ? `<img src="${p.avatar}">` : ['🐉','🐯','🦊','🐼','🦁','🐻'][p.id%6];
+    return `<div class="seat-item" id="si-${p.id}">
+      <div class="seat-move-btns">
+        <button class="seat-move-btn" onclick="moveSeat(${p.id},-1)" ${i===0?'disabled':''}>▲</button>
+        <button class="seat-move-btn" onclick="moveSeat(${p.id},1)" ${i===n-1?'disabled':''}>▼</button>
       </div>
-    </div>`).join('');
+      <span class="seat-num">座位 ${p.seat+1}</span>
+      <div class="seat-avatar" onclick="uploadAvatar(${p.id})">${av}</div>
+      <div style="flex:1"><input type="text" value="${p.name}" placeholder="昵称" onchange="updatePlayerName(${p.id},this.value)" style="padding:6px 10px;font-size:13px"></div>
+    </div>`;
+  }).join('');
 }
 
-// ── DRAG & DROP for seats ──
-let dragSrc = null;
-function initDragDrop() {
-  const list = document.getElementById('seatList');
-  if (!list) return;
-  list.querySelectorAll('.seat-item').forEach(item => {
-    item.addEventListener('dragstart', e => {
-      dragSrc = item;
-      item.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-    });
-    item.addEventListener('dragend', () => {
-      item.classList.remove('dragging');
-      list.querySelectorAll('.seat-item').forEach(i => i.classList.remove('drag-over'));
-    });
-    item.addEventListener('dragover', e => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      if (item !== dragSrc) {
-        list.querySelectorAll('.seat-item').forEach(i => i.classList.remove('drag-over'));
-        item.classList.add('drag-over');
-      }
-    });
-    item.addEventListener('drop', e => {
-      e.preventDefault();
-      if (dragSrc && dragSrc !== item) {
-        // Reorder seats
-        const srcPid = parseInt(dragSrc.dataset.pid);
-        const dstPid = parseInt(item.dataset.pid);
-        const srcPlayer = state.players.find(p => p.id === srcPid);
-        const dstPlayer = state.players.find(p => p.id === dstPid);
-        // Swap seats
-        const tmpSeat = srcPlayer.seat;
-        srcPlayer.seat = dstPlayer.seat;
-        dstPlayer.seat = tmpSeat;
-        saveState();
-        renderSettings();
-      }
-    });
-  });
+function moveSeat(pid, dir) {
+  const sorted = [...state.players].sort((a,b) => a.seat - b.seat);
+  const idx = sorted.findIndex(p => p.id === pid);
+  const swapIdx = idx + dir;
+  if (swapIdx < 0 || swapIdx >= sorted.length) return;
+  const tmp = sorted[idx].seat;
+  sorted[idx].seat = sorted[swapIdx].seat;
+  sorted[swapIdx].seat = tmp;
+  saveState();
+  renderSettings();
 }
+
+function initDragDrop() {}
 
 // ══════ ACTIONS ══════
 function showPage(name, tab) {
