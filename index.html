@@ -124,6 +124,12 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 .result-banner.no-change{background:var(--bg3);border:1px solid var(--border)}
 .result-title{font-family:"Noto Serif SC";font-size:16px;font-weight:700;margin-bottom:4px}
 .result-detail{font-size:12px;color:var(--text2)}
+.hist-session{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;cursor:pointer;transition:border-color .2s}
+.hist-session:hover{border-color:var(--border2)}
+.hist-session-header{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.hist-session-date{font-size:13px;font-weight:500;flex:1}
+.hist-session-meta{font-size:11px;color:var(--text3)}
+.hist-session-actions{display:flex;gap:6px;margin-top:10px}
 .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--bg3);border:1px solid var(--border2);border-radius:20px;padding:10px 20px;font-size:13px;z-index:300;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .empty{text-align:center;padding:40px 20px;color:var(--text3);font-size:13px}
@@ -187,6 +193,14 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
     <div class="modal-handle"></div>
     <div id="roundDetailContent"></div>
     <button class="btn btn-secondary btn-full" onclick="closeModal('modalRoundDetail')">关闭</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalHistSession">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div id="histSessionContent"></div>
+    <button class="btn btn-secondary btn-full" style="margin-top:8px" onclick="closeModal('modalHistSession')">关闭</button>
   </div>
 </div>
 
@@ -484,7 +498,7 @@ function renderHome() {
         <p style="color:var(--text2);font-size:13px;margin-bottom:14px">六人拖拉机 · 记录每一局的升降级历史</p>
         <button class="btn btn-primary btn-full" onclick="openSessionSetup()">🀄 新建局</button>
       </div>
-      ${state.sessions.length>0?`<div class="card"><div class="card-title">历史局</div>${state.sessions.slice(-5).reverse().map(s=>`<div class="stat-row"><div style="flex:1"><div style="font-size:13px">${new Date(s.startTime).toLocaleDateString('zh')}</div><div style="font-size:11px;color:var(--text3)">${s.rounds.length}局</div></div></div>`).join('')}</div>`:''}`;
+      ${renderHistoryList()}`;
     return;
   }
   const levelRows = state.players.map(p => {
@@ -517,6 +531,167 @@ function renderHome() {
       <button class="btn btn-secondary flex-1" onclick="endSession()">结束本局</button>
       <button class="btn btn-danger flex-1" onclick="if(confirm('确定删除本局？')){state.currentSession=null;saveState();renderAll();showToast('已删除 🗑️');}">删除本局</button>
     </div>`;
+}
+
+function renderHistoryList() {
+  if (!state.sessions.length) return '';
+  const sorted = [...state.sessions].reverse();
+  const cards = sorted.map((s, i) => {
+    const realIdx = state.sessions.length - 1 - i;
+    const date = new Date(s.startTime).toLocaleDateString('zh', {month:'short',day:'numeric',year:'numeric'});
+    const dealerWins = s.rounds.filter(r=>getScoreResult(r.score).side==='dealer').length;
+    const farmerWins = s.rounds.filter(r=>getScoreResult(r.score).side==='farmer').length;
+    const endGoal = s.endKey ? levelDisplay(s.endKey) : '—';
+    return `<div class="hist-session" onclick="openHistSession(${realIdx})">
+      <div class="hist-session-header">
+        <div class="hist-session-date">📅 ${date}</div>
+        <div class="hist-session-meta">${s.rounds.length} 局</div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);display:flex;gap:12px">
+        <span>庄胜 <b style="color:var(--gold2)">${dealerWins}</b></span>
+        <span>农胜 <b style="color:var(--green2)">${farmerWins}</b></span>
+        <span>终局目标 <b style="color:var(--accent2)">${endGoal}</b></span>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="card"><div class="card-title">历史局</div>${cards}</div>`;
+}
+
+function openHistSession(idx) {
+  window._histIdx = idx;
+  renderHistSessionModal(idx);
+  openModal('modalHistSession');
+}
+
+function renderHistSessionModal(idx) {
+  const s = state.sessions[idx];
+  if (!s) return;
+  const date = new Date(s.startTime).toLocaleDateString('zh', {year:'numeric',month:'long',day:'numeric'});
+  const sAchs = computeSessionAchievements(s);
+
+  // Level summary for each player at end of session
+  const levelRows = state.players.map(p => {
+    const lk = s.playerLevels[p.id] || START_KEY;
+    const cls = isBasement(lk)?'level-b':lk.startsWith('R1')?'level-r1':'level-r2';
+    return `<div class="stat-row">
+      <div style="display:flex;align-items:center;gap:8px;flex:1">
+        <div class="player-avatar" style="width:28px;height:28px;font-size:12px">${pAvatar(p.id)}</div>
+        <div style="font-size:13px">${p.name}</div>
+      </div>
+      <span class="level-badge ${cls}">${levelDisplay(lk)}</span>
+    </div>`;
+  }).join('');
+
+  // Round list
+  const roundList = s.rounds.map((r, i) => {
+    const result = getScoreResult(r.score);
+    const sc = result.side==='dealer'?'var(--gold2)':result.side==='farmer'?'var(--green2)':'var(--text2)';
+    const helpers = r.helperIds.map(h=>pName(h)).join('、');
+    const achTags = (r.achievements||[]).map(a=>`<span class="ach-tag ${a.color}">${a.pid!=null?pName(a.pid)+'·':''}${a.name}</span>`).join('');
+    return `<div class="round-item" onclick="openHistRoundDetail(${idx},${r.id})">
+      <div class="round-header">
+        <div class="round-num">#${i+1}</div>
+        <div class="round-roles">庄:${pName(r.dealerId)}${helpers?' 帮:'+helpers:''}</div>
+        <div class="round-score" style="color:${sc}">${r.score}</div>
+      </div>
+      ${achTags?`<div class="round-achievements">${achTags}</div>`:''}
+    </div>`;
+  }).join('');
+
+  document.getElementById('histSessionContent').innerHTML = `
+    <div class="modal-title">📅 ${date}</div>
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">最终级别</div>
+      ${levelRows}
+      ${sAchs.length>0?`<hr style="border:none;border-top:1px solid var(--border);margin:12px 0"><div class="round-achievements">${sAchs.map(a=>`<span class="ach-tag ${a.color}">${a.pid!=null?pName(a.pid)+'·':''}${a.name}</span>`).join('')}</div>`:''}
+    </div>
+    <div class="hist-session-actions">
+      <button class="btn btn-primary flex-1" onclick="continueHistSession(${idx})">▶ 继续本局</button>
+      <button class="btn btn-danger flex-1" onclick="deleteHistSession(${idx})">🗑 删除</button>
+    </div>
+    <div style="margin-top:14px">
+      <div class="card-title">对局记录 (${s.rounds.length}局)</div>
+      ${s.rounds.length===0?'<div class="empty" style="padding:20px"><div class="empty-icon">🃏</div>暂无记录</div>':roundList}
+    </div>`;
+}
+
+function openHistRoundDetail(sessionIdx, roundId) {
+  const s = state.sessions[sessionIdx];
+  if (!s) return;
+  const r = s.rounds.find(r=>r.id===roundId);
+  if (!r) return;
+  const result = getScoreResult(r.score);
+  const bannerCls = result.side==='dealer'?'dealer-win':result.side==='farmer'?'farmer-win':'no-change';
+  const bannerTitle = result.side==='dealer'?'庄家方胜利':result.side==='farmer'?'农民方胜利':'平局';
+  const helpers = r.helperIds.map(h=>pName(h)).join('、')||'无';
+  const farmers = s.players.filter(p=>p!==r.dealerId&&!r.helperIds.includes(p)).map(p=>pName(p)).join('、');
+  const levelRows = s.players.map(pid=>{
+    const before=r.levelsBefore[pid]; const after=r.levelsAfter[pid]; const delta=r.changes[pid];
+    const arrow=delta>0?`<span style="color:var(--green2)">▲${delta}</span>`:delta<0?`<span style="color:var(--red2)">▼${Math.abs(delta)}</span>`:`<span style="color:var(--text3)">—</span>`;
+    return `<div class="stat-row"><div style="flex:1;font-size:13px">${pName(pid)}</div><div style="font-size:12px;color:var(--text3);margin-right:6px">${levelDisplay(before)}→${levelDisplay(after)}</div>${arrow}</div>`;
+  }).join('');
+  const achTags=(r.achievements||[]).map(a=>`<span class="ach-tag ${a.color}">${a.pid!=null?pName(a.pid)+'·':''}${a.name}</span>`).join('')||'<span style="color:var(--text3);font-size:12px">无成就</span>';
+
+  document.getElementById('roundDetailContent').innerHTML=`
+    <div class="modal-title">第 ${roundId+1} 局详情</div>
+    <div class="result-banner ${bannerCls}"><div class="result-title">${bannerTitle}</div><div class="result-detail">农民得分：${r.score}</div></div>
+    <div class="card-title">人员</div>
+    <div style="font-size:13px;margin-bottom:12px">庄家：${pName(r.dealerId)}<br>帮手：${helpers}<br>农民：${farmers}</div>
+    <div class="card-title">级别变化</div>${levelRows}
+    <div class="card-title" style="margin-top:12px">成就</div>
+    <div class="round-achievements" style="margin-bottom:16px">${achTags}</div>
+    <button class="btn btn-danger btn-sm" onclick="editHistRound(${sessionIdx},${roundId})">✏️ 编辑本局</button>`;
+  openModal('modalRoundDetail');
+}
+
+function editHistRound(sessionIdx, roundId) {
+  const s = state.sessions[sessionIdx];
+  if (!s) return;
+  const r = s.rounds.find(r=>r.id===roundId);
+  if (!r) return;
+  // Trim rounds after this one, revert levels to before this round
+  s.rounds = s.rounds.slice(0, roundId);
+  s.playerLevels = {...r.levelsBefore};
+  s.currentDealerId = r.dealerId;
+  // Move to current session
+  state.sessions.splice(sessionIdx, 1);
+  state.currentSession = s;
+  // Prefill form
+  roundForm.dealerId = r.dealerId;
+  roundForm.helperIds = [...r.helperIds];
+  roundForm.score = r.score;
+  roundForm.heartFiveCaptors = [...(r.heartFiveCaptors||[])];
+  roundForm.diamondFiveCaptors = [...(r.diamondFiveCaptors||[])];
+  roundForm.penalties = {...r.penalties};
+  closeModal('modalRoundDetail');
+  closeModal('modalHistSession');
+  saveState();
+  showPage('round', document.querySelectorAll('.nav-tab')[1]);
+  showToast('正在编辑历史局 ✏️');
+}
+
+function continueHistSession(idx) {
+  if (state.currentSession) {
+    showToast('请先结束当前局 ❌'); return;
+  }
+  const s = state.sessions[idx];
+  if (!s) return;
+  state.currentSession = {...s};
+  state.sessions.splice(idx, 1);
+  saveState();
+  closeModal('modalHistSession');
+  resetRoundForm();
+  renderAll();
+  showToast('已载入历史局，继续！▶');
+}
+
+function deleteHistSession(idx) {
+  if (!confirm('确定删除这局历史记录？此操作不可撤销。')) return;
+  state.sessions.splice(idx, 1);
+  saveState();
+  closeModal('modalHistSession');
+  renderHome();
+  showToast('已删除 🗑️');
 }
 
 function renderRoundItem(r, num, session) {
