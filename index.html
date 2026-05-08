@@ -1498,7 +1498,7 @@ function renderCareer() {
 // REAL-TIME SYNC via JSONBin.io
 // ══════════════════════════════════════════════════
 const JSONBIN_BASE = 'https://api.jsonbin.io/v3';
-const POLL_INTERVAL = 10000;
+// Poll interval now defined in startPolling (30s, guests only)
 let _pollTimer = null;
 let _isSyncing = false;
 let _lastRoundCount = 0;
@@ -1515,9 +1515,12 @@ function renderRoomBar() {
   }
   const roleLabel = r.isHost ? '🏠 房主' : '👥 观看';
   const statusDot = _isSyncing ? '<span class="sync-dot"></span>同步中' : '● 已连接';
+  const refreshBtn = r.isHost ? '' :
+    '<button class="btn btn-sm btn-secondary" style="margin-right:6px" onclick="manualRefresh()">↻ 刷新</button>';
   return '<div class="room-bar">' +
-    '<div><div class="room-code">' + r.code + '</div>' +
-    '<div style="font-size:10px;color:var(--text3)">' + roleLabel + ' · <span class="room-status live">' + statusDot + '</span></div></div>' +
+    '<div style="flex:1"><div class="room-code">' + r.code + '</div>' +
+    '<div style="font-size:10px;color:var(--text3)">' + roleLabel + ' · <span class="room-status live">' + statusDot + '</span> · 30s自动刷新</div></div>' +
+    refreshBtn +
     '<button class="btn btn-sm btn-danger" onclick="leaveRoom()">离开</button></div>';
 }
 
@@ -1670,15 +1673,36 @@ async function pullFromRoom() {
   } catch(e) { console.error('pull error', e); }
 }
 
+// Adaptive polling: 30s normally, pause when hidden, guests only
+const POLL_INTERVAL_ACTIVE = 30000;  // 30s when visible
+let _appVisible = true;
+
 function startPolling() {
   stopPolling();
-  _pollTimer = setInterval(pullFromRoom, POLL_INTERVAL);
-  if (state.room && state.room.isHost) pushToRoom();
-  else pullFromRoom();
+  // Guests poll; host only pushes (no need to pull own data)
+  if (state.room && !state.room.isHost) {
+    pullFromRoom(); // immediate pull on join
+    _pollTimer = setInterval(function() {
+      if (_appVisible && state.room && !state.room.isHost) pullFromRoom();
+    }, POLL_INTERVAL_ACTIVE);
+  }
 }
 
 function stopPolling() {
   if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+}
+
+// Pause/resume polling based on page visibility (screen off, app switch etc.)
+document.addEventListener('visibilitychange', function() {
+  _appVisible = !document.hidden;
+  if (_appVisible && state.room && !state.room.isHost) {
+    // Pull immediately when app comes back to foreground
+    pullFromRoom();
+  }
+});
+
+function manualRefresh() {
+  pullFromRoom().then(function() { renderHome(); showToast('已刷新 ✅'); });
 }
 
 function leaveRoom() {
