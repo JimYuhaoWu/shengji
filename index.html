@@ -999,8 +999,9 @@ function renderSettings() {
     </div>
     <div class="card">
       <div class="card-title">实时同步设置</div>
+      <p style="font-size:11px;color:var(--text3);margin-bottom:10px">只有房主需要 API Key。朋友加入无需 Key。</p>
       <div class="input-group">
-        <label class="input-label">JSONBin.io API Key <a href="https://jsonbin.io" target="_blank" style="color:var(--accent);font-size:11px">获取免费Key →</a></label>
+        <label class="input-label">JSONBin.io API Key（仅房主需要）<a href="https://jsonbin.io" target="_blank" style="color:var(--accent);font-size:11px"> 获取免费Key →</a></label>
         <input type="password" id="apiKeyInput" placeholder="$2b$10$..."
           onchange="state.jsonbinApiKey=this.value;saveState();showToast('API Key已保存 ✅')">
       </div>
@@ -1598,10 +1599,10 @@ async function joinRoomById() {
   if (!binId) { showToast('请输入 Bin ID ❌'); return; }
   showToast('正在连接…');
   try {
-    const apiKey = state.jsonbinApiKey || '';
-    const headers = {};
-    if (apiKey) headers['X-Master-Key'] = apiKey;
-    const res = await fetch(JSONBIN_BASE + '/b/' + binId + '/latest', { headers });
+    // Reading a public bin requires no API key
+    const res = await fetch(JSONBIN_BASE + '/b/' + binId + '/latest', {
+      headers: { 'X-Bin-Meta': 'false' }
+    });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     applyRemotePayload(data.record);
@@ -1655,10 +1656,11 @@ async function pushToRoom() {
 async function pullFromRoom() {
   const r = state.room;
   if (!r) return;
-  const headers = {};
-  if (state.jsonbinApiKey) headers['X-Master-Key'] = state.jsonbinApiKey;
+  // Public bins are readable without API key — guests don't consume host's quota
   try {
-    const res = await fetch(JSONBIN_BASE + '/b/' + r.binId + '/latest', { headers });
+    const res = await fetch(JSONBIN_BASE + '/b/' + r.binId + '/latest', {
+      headers: { 'X-Bin-Meta': 'false' }  // skip metadata to reduce response size
+    });
     if (!res.ok) return;
     const data = await res.json();
     const remote = data.record;
