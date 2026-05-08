@@ -143,6 +143,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
 </head>
 <body>
 <nav class="nav">
@@ -1230,25 +1231,26 @@ function shareHistSession(idx) {
 }
 function encodeAndCopyLink(session, label) {
   try {
-    // Strip avatar data to keep URL short, just pass session + player names
     const payload = {
       session,
       players: state.players.map(p => ({id:p.id, name:p.name, seat:p.seat}))
     };
-    const json = JSON.stringify(payload);
-    const b64 = btoa(unescape(encodeURIComponent(json)));
+    const jsonStr = JSON.stringify(payload);
+    // Compress with pako (zlib), then base64url encode
+    const compressed = pako.deflate(jsonStr);
+    const b64 = btoa(String.fromCharCode(...compressed))
+      .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
     const url = window.location.href.split('?')[0] + '?share=' + b64;
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(url).then(() => showToast('🔗 分享链接已复制！'));
+      navigator.clipboard.writeText(url).then(() => showToast('🔗 链接已复制 ('+(b64.length)+'字符)'));
     } else {
-      // Fallback
       const ta = document.createElement('textarea');
-      ta.value = url; ta.style.position='fixed'; ta.style.opacity='0';
+      ta.value = url; ta.style.cssText='position:fixed;opacity:0';
       document.body.appendChild(ta); ta.select();
       document.execCommand('copy'); document.body.removeChild(ta);
-      showToast('🔗 分享链接已复制！');
+      showToast('🔗 链接已复制 ('+(b64.length)+'字符)');
     }
-  } catch(e) { showToast('复制失败，请手动分享 ❌'); }
+  } catch(e) { showToast('复制失败 ❌ ' + e.message); }
 }
 
 function loadSharedSession() {
@@ -1256,9 +1258,14 @@ function loadSharedSession() {
   const share = params.get('share');
   if (!share) return;
   try {
-    const json = decodeURIComponent(escape(atob(share)));
-    const payload = JSON.parse(json);
-    // Show shared session in a read-only view
+    // Re-pad base64url and decode
+    const b64 = share.replace(/-/g,'+').replace(/_/g,'/');
+    const padded = b64 + '=='.slice(0, (4 - b64.length % 4) % 4);
+    const binary = atob(padded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const jsonStr = pako.inflate(bytes, {to: 'string'});
+    const payload = JSON.parse(jsonStr);
     window._sharedPayload = payload;
     renderSharedSessionView(payload);
   } catch(e) { console.error('Share decode error', e); }
