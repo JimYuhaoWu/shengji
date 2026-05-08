@@ -294,7 +294,7 @@ let state = {
   currentSession: null,
 };
 
-function saveState() { try { localStorage.setItem('sj_v3', JSON.stringify(state)); } catch(e){} }
+// saveState defined below with room sync
 function loadState() {
   try {
     const raw = localStorage.getItem('sj_v3');
@@ -1001,7 +1001,7 @@ function renderSettings() {
       <div class="card-title">实时同步设置</div>
       <div class="input-group">
         <label class="input-label">JSONBin.io API Key <a href="https://jsonbin.io" target="_blank" style="color:var(--accent);font-size:11px">获取免费Key →</a></label>
-        <input type="password" id="apiKeyInput" placeholder="$2b$10$..." value="${state.jsonbinApiKey||''}"
+        <input type="password" id="apiKeyInput" placeholder="$2b$10$..."
           onchange="state.jsonbinApiKey=this.value;saveState();showToast('API Key已保存 ✅')">
       </div>
       <div style="display:flex;gap:8px">
@@ -1023,6 +1023,15 @@ function renderSettings() {
       <p style="font-size:12px;color:var(--text3);line-height:1.7">升级记分册 v3.0<br>六人拖拉机 · 记录 · 统计 · 成就<br>添加到主屏幕以获得最佳体验</p>
     </div>`;
   initDragDrop();
+  // Set API key value after render (can't use template literals in static HTML attrs)
+  const ak = document.getElementById('apiKeyInput');
+  if (ak) ak.value = state.jsonbinApiKey || '';
+  // Inject room info if in a room
+  const settingsEl = document.getElementById('settingsContent');
+  if (settingsEl && state.room) {
+    const cards = settingsEl.querySelectorAll('.card');
+    if (cards.length >= 2) cards[1].insertAdjacentHTML('afterend', renderRoomInfo());
+  }
 }
 
 function renderSeatItems() {
@@ -1057,6 +1066,11 @@ function moveSeat(pid, dir) {
 function initDragDrop() {}
 
 // ══════ ACTIONS ══════
+function goToSettings() {
+  const tab = document.querySelectorAll('.nav-tab')[4];
+  showPage('settings', tab);
+}
+
 function showPage(name, tab) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
@@ -1478,55 +1492,58 @@ function renderCareer() {
 }
 
 
+
+
 // ══════════════════════════════════════════════════
 // REAL-TIME SYNC via JSONBin.io
 // ══════════════════════════════════════════════════
-// state.room = { binId, code, isHost, lastPushed }
-// state.jsonbinApiKey = "..."
-
 const JSONBIN_BASE = 'https://api.jsonbin.io/v3';
-const POLL_INTERVAL = 10000; // 10 seconds
+const POLL_INTERVAL = 10000;
 let _pollTimer = null;
 let _isSyncing = false;
+let _lastRoundCount = 0;
 
-// Generate a short human-readable room code from bin ID
 function makRoomCode(binId) {
-  // Take last 6 chars of binId, uppercase
   return binId.slice(-6).toUpperCase();
 }
 
-// ── ROOM BAR (shown on home page when session active) ──
 function renderRoomBar() {
   const r = state.room;
   if (!r) {
-    return `<div class="room-bar">
-      <div style="flex:1;font-size:12px;color:var(--text3)">未连接同步房间</div>
-      <button class="btn btn-sm btn-secondary" onclick="showPage('settings',document.querySelectorAll('.nav-tab')[4])">设置同步</button>
-    </div>`;
+    return '<div class="room-bar"><div style="flex:1;font-size:12px;color:var(--text3)">未连接同步房间</div>' +
+      '<button class="btn btn-sm btn-secondary" onclick="goToSettings()">设置同步</button></div>';
   }
   const roleLabel = r.isHost ? '🏠 房主' : '👥 观看';
-  const statusHtml = _isSyncing
-    ? `<span class="room-status live"><span class="sync-dot"></span>同步中</span>`
-    : `<span class="room-status live">● 已连接</span>`;
-  return `<div class="room-bar">
-    <div>
-      <div class="room-code">${r.code}</div>
-      <div style="font-size:10px;color:var(--text3)">${roleLabel} · ${statusHtml}</div>
-    </div>
-    <button class="btn btn-sm btn-danger" onclick="leaveRoom()">离开</button>
-  </div>`;
+  const statusDot = _isSyncing ? '<span class="sync-dot"></span>同步中' : '● 已连接';
+  return '<div class="room-bar">' +
+    '<div><div class="room-code">' + r.code + '</div>' +
+    '<div style="font-size:10px;color:var(--text3)">' + roleLabel + ' · <span class="room-status live">' + statusDot + '</span></div></div>' +
+    '<button class="btn btn-sm btn-danger" onclick="leaveRoom()">离开</button></div>';
 }
 
-// ── CREATE ROOM (host) ──
+function renderRoomInfo() {
+  const r = state.room;
+  if (!r) return '';
+  if (r.isHost) {
+    return '<div class="card" style="margin-top:8px"><div class="card-title">当前房间</div>' +
+      '<div style="font-size:12px;color:var(--text2);margin-bottom:6px">把 Bin ID 分享给朋友：</div>' +
+      '<div style="font-family:monospace;font-size:12px;background:var(--bg4);padding:8px 10px;border-radius:8px;word-break:break-all;color:var(--accent2)">' + r.binId + '</div>' +
+      '<button class="btn btn-sm btn-secondary btn-full" style="margin-top:8px" onclick="copyBinId()">📋 复制 Bin ID</button>' +
+      '<button class="btn btn-sm btn-danger btn-full" style="margin-top:6px" onclick="leaveRoom()">离开房间</button></div>';
+  }
+  return '<div class="card" style="margin-top:8px"><div class="card-title">当前房间</div>' +
+    '<div style="font-size:12px;color:var(--text2)">已加入 <b style="color:var(--accent2)">' + r.code + '</b>，每10秒自动同步</div>' +
+    '<button class="btn btn-sm btn-danger btn-full" style="margin-top:8px" onclick="leaveRoom()">离开房间</button></div>';
+}
+
 async function createRoom() {
   const apiKey = state.jsonbinApiKey;
   if (!apiKey) { showToast('请先填写 API Key ❌'); return; }
   if (!state.currentSession) { showToast('请先创建游戏局 ❌'); return; }
-
   showToast('正在创建房间…');
   try {
     const payload = buildSyncPayload();
-    const res = await fetch(`${JSONBIN_BASE}/b`, {
+    const res = await fetch(JSONBIN_BASE + '/b', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1545,73 +1562,47 @@ async function createRoom() {
     startPolling();
     renderHome();
     renderSettings();
-    showRoomCreatedModal(code);
+    showRoomCreatedModal(code, binId);
   } catch(e) {
     showToast('创建失败: ' + e.message + ' ❌');
   }
 }
 
-function showRoomCreatedModal(code) {
-  document.getElementById('roomModalContent').innerHTML = `
-    <div style="text-align:center;padding:16px 0">
-      <div style="font-size:13px;color:var(--text2);margin-bottom:12px">房间已创建！把房间号告诉朋友们：</div>
-      <div style="font-family:'Playfair Display';font-size:48px;letter-spacing:.3em;color:var(--accent2);margin:16px 0">${code}</div>
-      <div style="font-size:12px;color:var(--text3);margin-bottom:20px">朋友在设置页面点"加入房间"并输入此号码</div>
-      <button class="btn btn-primary btn-full" onclick="closeModal('modalRoom')">好的！</button>
-    </div>`;
+function showRoomCreatedModal(code, binId) {
+  document.getElementById('roomModalContent').innerHTML =
+    '<div style="text-align:center;padding:16px 0">' +
+    '<div style="font-size:13px;color:var(--text2);margin-bottom:8px">房间已创建！把以下 Bin ID 发给朋友：</div>' +
+    '<div style="font-family:monospace;font-size:12px;background:var(--bg4);padding:10px;border-radius:8px;word-break:break-all;color:var(--accent2);margin:12px 0">' + binId + '</div>' +
+    '<button class="btn btn-secondary btn-full" style="margin-bottom:8px" onclick="copyBinId()">📋 复制 Bin ID</button>' +
+    '<button class="btn btn-primary btn-full" onclick="closeModal(&apos;modalRoom&apos;)">好的！</button></div>';
   openModal('modalRoom');
 }
 
-// ── JOIN ROOM (guest) ──
 function openJoinRoom() {
-  document.getElementById('roomModalContent').innerHTML = `
-    <div style="margin-bottom:16px">
-      <label class="input-label">输入房间号（6位）</label>
-      <input class="code-input" id="joinCodeInput" type="text" maxlength="6" placeholder="XXXXXX"
-        oninput="this.value=this.value.toUpperCase()">
-    </div>
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-secondary flex-1" onclick="closeModal('modalRoom')">取消</button>
-      <button class="btn btn-primary flex-1" onclick="joinRoom()">加入</button>
-    </div>`;
+  document.getElementById('roomModalContent').innerHTML =
+    '<div style="margin-bottom:12px;font-size:13px;color:var(--text2)">向房主索要 Bin ID，粘贴到下方：</div>' +
+    '<div class="input-group"><label class="input-label">Bin ID</label>' +
+    '<input id="joinBinIdInput" type="text" placeholder="6408b35c3cd6571f853f6b1f" style="font-size:13px"></div>' +
+    '<div style="display:flex;gap:8px">' +
+    '<button class="btn btn-secondary flex-1" onclick="closeModal(&apos;modalRoom&apos;)">取消</button>' +
+    '<button class="btn btn-primary flex-1" onclick="joinRoomById()">加入</button></div>';
   openModal('modalRoom');
 }
 
-async function joinRoom() {
-  const code = (document.getElementById('joinCodeInput')?.value||'').trim().toUpperCase();
-  if (code.length !== 6) { showToast('请输入6位房间号 ❌'); return; }
-
-  // We need to find the bin by code — but JSONBin doesn't support search by name.
-  // Instead, we store the full binId in the room code via a lookup bin,
-  // OR we ask the user for the binId directly.
-  // Better UX: host shares both code+binId. We embed binId in the code itself.
-  // Since code IS last 6 of binId, we can't reverse it.
-  // Solution: show a second field for the full bin ID, or use a lookup approach.
-  // SIMPLEST: the "code" shown to host is actually the full bin ID displayed short,
-  // and we store a lookup table in a fixed "directory" bin.
-  // For simplicity: host shares the binId directly (copy button), guests paste it.
-  // But UX said "room code"... let's use a different approach:
-  // Store room code → binId mapping in a fixed public directory bin.
-  showToast('正在查找房间…');
+async function joinRoomById() {
+  const el = document.getElementById('joinBinIdInput');
+  const binId = el ? el.value.trim() : '';
+  if (!binId) { showToast('请输入 Bin ID ❌'); return; }
+  showToast('正在连接…');
   try {
-    // Look up binId from directory
     const apiKey = state.jsonbinApiKey || '';
-    const dirRes = await fetch(`${JSONBIN_BASE}/b/${SHENGJI_DIR_BIN}/latest`, {
-      headers: apiKey ? {'X-Master-Key': apiKey} : {}
-    });
-    if (!dirRes.ok) throw new Error('无法连接目录');
-    const dirData = await dirRes.json();
-    const dir = dirData.record || {};
-    const binId = dir[code];
-    if (!binId) { showToast('找不到房间 ' + code + ' ❌'); return; }
-
-    // Fetch the bin
-    const binRes = await fetch(`${JSONBIN_BASE}/b/${binId}/latest`, {
-      headers: apiKey ? {'X-Master-Key': apiKey} : {}
-    });
-    if (!binRes.ok) throw new Error('HTTP ' + binRes.status);
-    const binData = await binRes.json();
-    applyRemotePayload(binData.record);
+    const headers = {};
+    if (apiKey) headers['X-Master-Key'] = apiKey;
+    const res = await fetch(JSONBIN_BASE + '/b/' + binId + '/latest', { headers });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    applyRemotePayload(data.record);
+    const code = makRoomCode(binId);
     state.room = { binId, code, isHost: false, lastPushed: 0 };
     saveState();
     startPolling();
@@ -1623,84 +1614,51 @@ async function joinRoom() {
   }
 }
 
-// Directory bin to map short codes → binIds
-// We'll use a single hardcoded public bin as a directory
-// This bin is created once and its ID is baked into the app
-const SHENGJI_DIR_BIN = ''; // Will be set after first run — see createDirectoryBin()
-
-async function ensureDirectoryBin(apiKey, code, binId) {
-  // If no directory bin exists, create one; otherwise update it
-  let dirBinId = state.dirBinId || '';
-  if (!dirBinId) {
-    try {
-      const res = await fetch(`${JSONBIN_BASE}/b`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Master-Key': apiKey,
-          'X-Bin-Name': 'shengji-directory',
-          'X-Bin-Private': 'false',
-        },
-        body: JSON.stringify({[code]: binId})
-      });
-      const data = await res.json();
-      dirBinId = data.metadata.id;
-      state.dirBinId = dirBinId;
-      saveState();
-    } catch(e) { console.error('dir create error', e); }
-  } else {
-    // Update existing directory
-    try {
-      // First get current directory
-      const getRes = await fetch(`${JSONBIN_BASE}/b/${dirBinId}/latest`, {
-        headers: {'X-Master-Key': apiKey}
-      });
-      const existing = getRes.ok ? (await getRes.json()).record : {};
-      existing[code] = binId;
-      await fetch(`${JSONBIN_BASE}/b/${dirBinId}`, {
-        method: 'PUT',
-        headers: {'Content-Type':'application/json','X-Master-Key':apiKey},
-        body: JSON.stringify(existing)
-      });
-    } catch(e) { console.error('dir update error', e); }
-  }
-  return dirBinId;
+function buildSyncPayload() {
+  return {
+    updatedAt: Date.now(),
+    session: state.currentSession,
+    players: state.players.map(function(p) { return {id:p.id, name:p.name, seat:p.seat}; }),
+  };
 }
 
-// ── PUSH (host only) ──
+function applyRemotePayload(remote) {
+  if (!remote) return;
+  if (remote.session) state.currentSession = remote.session;
+  if (remote.players) {
+    remote.players.forEach(function(rp) {
+      const lp = state.players.find(function(p) { return p.id === rp.id; });
+      if (lp) { lp.name = rp.name; lp.seat = rp.seat; }
+    });
+  }
+  saveState();
+}
+
 async function pushToRoom() {
   const r = state.room;
   if (!r || !r.isHost || !state.jsonbinApiKey) return;
   _isSyncing = true;
   try {
-    const payload = buildSyncPayload();
-    await fetch(`${JSONBIN_BASE}/b/${r.binId}`, {
+    const res = await fetch(JSONBIN_BASE + '/b/' + r.binId, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Master-Key': state.jsonbinApiKey,
-      },
-      body: JSON.stringify(payload)
+      headers: { 'Content-Type': 'application/json', 'X-Master-Key': state.jsonbinApiKey },
+      body: JSON.stringify(buildSyncPayload())
     });
-    r.lastPushed = Date.now();
-    saveState();
+    if (res.ok) { r.lastPushed = Date.now(); saveState(); }
   } catch(e) { console.error('push error', e); }
-  finally { _isSyncing = false; }
+  _isSyncing = false;
 }
 
-// ── PULL (guests + host auto-refresh) ──
 async function pullFromRoom() {
   const r = state.room;
   if (!r) return;
-  const apiKey = state.jsonbinApiKey || '';
+  const headers = {};
+  if (state.jsonbinApiKey) headers['X-Master-Key'] = state.jsonbinApiKey;
   try {
-    const res = await fetch(`${JSONBIN_BASE}/b/${r.binId}/latest`, {
-      headers: apiKey ? {'X-Master-Key': apiKey} : {}
-    });
+    const res = await fetch(JSONBIN_BASE + '/b/' + r.binId + '/latest', { headers });
     if (!res.ok) return;
     const data = await res.json();
     const remote = data.record;
-    // Only apply if newer
     if (remote && remote.updatedAt && remote.updatedAt !== (state._lastRemoteUpdate||0)) {
       state._lastRemoteUpdate = remote.updatedAt;
       if (!r.isHost) {
@@ -1712,36 +1670,10 @@ async function pullFromRoom() {
   } catch(e) { console.error('pull error', e); }
 }
 
-function buildSyncPayload() {
-  return {
-    updatedAt: Date.now(),
-    session: state.currentSession,
-    players: state.players.map(p => ({id:p.id, name:p.name, seat:p.seat})),
-  };
-}
-
-function applyRemotePayload(remote) {
-  if (!remote) return;
-  // Apply session data from host
-  if (remote.session) {
-    state.currentSession = remote.session;
-  }
-  // Update player names/seats (but keep local avatars)
-  if (remote.players) {
-    remote.players.forEach(rp => {
-      const lp = state.players.find(p => p.id === rp.id);
-      if (lp) { lp.name = rp.name; lp.seat = rp.seat; }
-    });
-  }
-  saveState();
-}
-
-// ── POLLING ──
 function startPolling() {
   stopPolling();
-  _pollTimer = setInterval(() => pullFromRoom(), POLL_INTERVAL);
-  // Also push/pull immediately
-  if (state.room?.isHost) pushToRoom();
+  _pollTimer = setInterval(pullFromRoom, POLL_INTERVAL);
+  if (state.room && state.room.isHost) pushToRoom();
   else pullFromRoom();
 }
 
@@ -1759,123 +1691,35 @@ function leaveRoom() {
   showToast('已离开房间');
 }
 
-// Auto-push after every round submission
-const _origSubmitRound = submitRound;
-// We hook into submitRound by patching saveState to push after saves
-let _pushPending = false;
-function pushAfterRound() {
-  if (state.room?.isHost) pushToRoom();
-}
-
-// ── JOIN BY CODE (simplified: share binId as the code) ──
-// Override joinRoom with a simpler approach: 
-// The room "code" IS the binId. We display only last 6 chars for humans,
-// but the actual join uses a text field where host pastes full bin URL/ID.
-// Let's redo the join flow to be cleaner:
-function openJoinRoom() {
-  document.getElementById('roomModalContent').innerHTML = `
-    <div style="margin-bottom:12px;font-size:13px;color:var(--text2)">
-      向房主索要房间ID（在房主的设置页面可以看到）
-    </div>
-    <div class="input-group">
-      <label class="input-label">Bin ID（房主分享给你）</label>
-      <input id="joinBinIdInput" type="text" placeholder="6408b35c3cd6571f853f6b1f" style="font-size:13px;letter-spacing:.05em">
-    </div>
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-secondary flex-1" onclick="closeModal('modalRoom')">取消</button>
-      <button class="btn btn-primary flex-1" onclick="joinRoomById()">加入</button>
-    </div>`;
-  openModal('modalRoom');
-}
-
-async function joinRoomById() {
-  const binId = (document.getElementById('joinBinIdInput')?.value||'').trim();
-  if (!binId) { showToast('请输入 Bin ID ❌'); return; }
-  showToast('正在连接…');
-  try {
-    const apiKey = state.jsonbinApiKey || '';
-    const res = await fetch(`${JSONBIN_BASE}/b/${binId}/latest`, {
-      headers: apiKey ? {'X-Master-Key': apiKey} : {}
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    applyRemotePayload(data.record);
-    const code = makRoomCode(binId);
-    state.room = { binId, code, isHost: false, lastPushed: 0 };
-    saveState();
-    startPolling();
-    closeModal('modalRoom');
-    renderAll();
-    showToast('已加入房间 ' + code + ' ✅');
-  } catch(e) {
-    showToast('加入失败: ' + e.message + ' ❌');
-  }
-}
-
-// Show bin ID to host in settings so they can share it
-function renderRoomInfo() {
-  const r = state.room;
-  if (!r) return '';
-  if (r.isHost) {
-    return `<div class="card" style="margin-top:8px">
-      <div class="card-title">当前房间</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:6px">把 Bin ID 分享给朋友，让他们加入：</div>
-      <div style="font-family:monospace;font-size:12px;background:var(--bg4);padding:8px 10px;border-radius:8px;word-break:break-all;color:var(--accent2)">${r.binId}</div>
-      <button class="btn btn-sm btn-secondary btn-full" style="margin-top:8px" onclick="copyBinId()">📋 复制 Bin ID</button>
-      <button class="btn btn-sm btn-danger btn-full" style="margin-top:6px" onclick="leaveRoom()">离开房间</button>
-    </div>`;
-  } else {
-    return `<div class="card" style="margin-top:8px">
-      <div class="card-title">当前房间</div>
-      <div style="font-size:12px;color:var(--text2)">已加入 <b style="color:var(--accent2)">${r.code}</b>，每10秒自动同步</div>
-      <button class="btn btn-sm btn-danger btn-full" style="margin-top:8px" onclick="leaveRoom()">离开房间</button>
-    </div>`;
-  }
-}
-
 function copyBinId() {
   const r = state.room;
   if (!r) return;
-  navigator.clipboard?.writeText(r.binId).then(()=>showToast('已复制 Bin ID 📋'))
-    .catch(()=>{
-      const ta=document.createElement('textarea');
-      ta.value=r.binId;ta.style.cssText='position:fixed;opacity:0';
-      document.body.appendChild(ta);ta.select();
-      document.execCommand('copy');document.body.removeChild(ta);
-      showToast('已复制 Bin ID 📋');
-    });
-}
-
-// Inject room info into settings render
-const _origRenderSettings = renderSettings;
-function renderSettings() {
-  _origRenderSettings();
-  const settingsEl = document.getElementById('settingsContent');
-  if (settingsEl && state.room) {
-    const firstCard = settingsEl.querySelector('.card');
-    if (firstCard) firstCard.insertAdjacentHTML('afterend', renderRoomInfo());
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(r.binId).then(function() { showToast('已复制 Bin ID 📋'); });
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = r.binId; ta.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    showToast('已复制 Bin ID 📋');
   }
 }
 
-// Auto-push after submitRound
-const _origSaveState = saveState;
-let _lastRoundCount = 0;
-function saveState() {
-  _origSaveState();
-  const newCount = state.currentSession?.rounds?.length || 0;
-  if (newCount > _lastRoundCount) {
-    _lastRoundCount = newCount;
-    if (state.room?.isHost) {
-      setTimeout(() => pushToRoom(), 300);
-    }
-  }
-}
-
-// Resume polling on app load if room exists
 function resumeRoomSync() {
   if (state.room) {
+    _lastRoundCount = state.currentSession ? state.currentSession.rounds.length : 0;
     startPolling();
-    console.log('Resumed room sync for', state.room.code);
+  }
+}
+
+// Auto-push after new round saved
+const _origSaveState = saveState;
+function saveState() {
+  try { localStorage.setItem('sj_v3', JSON.stringify(state)); } catch(e) {}
+  const newCount = state.currentSession ? state.currentSession.rounds.length : 0;
+  if (newCount > _lastRoundCount) {
+    _lastRoundCount = newCount;
+    if (state.room && state.room.isHost) setTimeout(pushToRoom, 300);
   }
 }
 
