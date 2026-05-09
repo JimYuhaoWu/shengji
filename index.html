@@ -1599,13 +1599,15 @@ async function joinRoomById() {
   if (!binId) { showToast('请输入 Bin ID ❌'); return; }
   showToast('正在连接…');
   try {
-    // Reading a public bin requires no API key
-    const res = await fetch(JSONBIN_BASE + '/b/' + binId + '/latest', {
-      headers: { 'X-Bin-Meta': 'false' }
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    // Public bins readable without API key
+    const res = await fetch(JSONBIN_BASE + '/b/' + binId + '/latest');
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' — check Bin ID');
     const data = await res.json();
-    applyRemotePayload(data.record);
+    const remote = data.record || data;
+    if (!remote || !remote.session) throw new Error('Bin 内容为空或格式错误');
+    // Force apply and set lastRemoteUpdate so polling works correctly
+    state._lastRemoteUpdate = remote.updatedAt || 0;
+    applyRemotePayload(remote);
     const code = makRoomCode(binId);
     state.room = { binId, code, isHost: false, lastPushed: 0 };
     saveState();
@@ -1628,14 +1630,18 @@ function buildSyncPayload() {
 
 function applyRemotePayload(remote) {
   if (!remote) return;
-  if (remote.session) state.currentSession = remote.session;
+  if (remote.session) {
+    state.currentSession = remote.session;
+  }
+  // Update player names/seats but preserve local avatars
   if (remote.players) {
     remote.players.forEach(function(rp) {
       const lp = state.players.find(function(p) { return p.id === rp.id; });
       if (lp) { lp.name = rp.name; lp.seat = rp.seat; }
     });
   }
-  saveState();
+  // Don't call saveState() here to avoid triggering push loop
+  try { localStorage.setItem('sj_v3', JSON.stringify(state)); } catch(e) {}
 }
 
 async function pushToRoom() {
@@ -1655,22 +1661,19 @@ async function pushToRoom() {
 
 async function pullFromRoom() {
   const r = state.room;
-  if (!r) return;
-  // Public bins are readable without API key — guests don't consume host's quota
+  if (!r || r.isHost) return; // host never needs to pull
   try {
-    const res = await fetch(JSONBIN_BASE + '/b/' + r.binId + '/latest', {
-      headers: { 'X-Bin-Meta': 'false' }  // skip metadata to reduce response size
-    });
-    if (!res.ok) return;
+    const res = await fetch(JSONBIN_BASE + '/b/' + r.binId + '/latest');
+    if (!res.ok) { console.error('pull HTTP', res.status); return; }
     const data = await res.json();
-    const remote = data.record;
-    if (remote && remote.updatedAt && remote.updatedAt !== (state._lastRemoteUpdate||0)) {
+    // JSONBin v3 wraps in {record: ..., metadata: ...}
+    const remote = data.record || data;
+    if (!remote || !remote.updatedAt) return;
+    if (remote.updatedAt !== (state._lastRemoteUpdate || 0)) {
       state._lastRemoteUpdate = remote.updatedAt;
-      if (!r.isHost) {
-        applyRemotePayload(remote);
-        renderHome();
-        renderStats();
-      }
+      applyRemotePayload(remote);
+      renderAll();
+      console.log('Synced from room', r.code, 'at', new Date().toLocaleTimeString());
     }
   } catch(e) { console.error('pull error', e); }
 }
