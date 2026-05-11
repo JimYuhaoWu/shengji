@@ -415,9 +415,12 @@ function computeAchievements(round, session, levelsBefore, levelsAfter) {
     farmerIds.forEach(pid => ach('小跳', 'green', pid));
   }
 
-  // Red five captures — credited to captor
+  // Red five captures — credited to captor; loss credited to victim
+  const {heartFiveVictims, diamondFiveVictims} = round;
   (heartFiveCaptors||[]).forEach(pid => ach('抓住红五♥', 'red', pid));
+  (heartFiveVictims||[]).forEach(pid => ach('被抓红五♥', 'red', pid));
   (diamondFiveCaptors||[]).forEach(pid => ach('抓住方五♦', 'gold', pid));
+  (diamondFiveVictims||[]).forEach(pid => ach('被抓方五♦', 'gold', pid));
 
   // 坏了坏了: dealer side lost AND red five captured — assigned to all dealer side
   const rfCaptured = (heartFiveCaptors||[]).length + (diamondFiveCaptors||[]).length > 0;
@@ -500,8 +503,10 @@ function resetRoundForm() {
     dealerId: s ? s.currentDealerId : null,
     helperIds: [],
     score: 120,
-    heartFiveCaptors: [],
-    diamondFiveCaptors: [],
+    heartFiveCaptors: [],   // farmer who captured each ♥5
+    heartFiveVictims: [],   // dealer-side player each ♥5 was taken from
+    diamondFiveCaptors: [], // farmer who captured each ♦5
+    diamondFiveVictims: [], // dealer-side player each ♦5 was taken from
     penalties: {},
   };
   if (s) s.players.forEach(p => { roundForm.penalties[p] = 0; });
@@ -699,7 +704,9 @@ function editHistRound(sessionIdx, roundId) {
   roundForm.helperIds = [...r.helperIds];
   roundForm.score = r.score;
   roundForm.heartFiveCaptors = [...(r.heartFiveCaptors||[])];
+  roundForm.heartFiveVictims = [...(r.heartFiveVictims||[])];
   roundForm.diamondFiveCaptors = [...(r.diamondFiveCaptors||[])];
+  roundForm.diamondFiveVictims = [...(r.diamondFiveVictims||[])];
   roundForm.penalties = {...r.penalties};
   closeModal('modalRoundDetail');
   closeModal('modalHistSession');
@@ -768,20 +775,41 @@ function renderRound() {
     </div>`;
   }).join('');
 
-  const buildCaptorRows = (type, captors) => {
+  const dealerSideIds = roundForm.dealerId !== null
+    ? [roundForm.dealerId, ...roundForm.helperIds]
+    : [];
+
+  const buildCaptorRows = (type, captors, victims) => {
     if (!captors.length) return '';
-    const selClass = type==='heart'?'sel-heart':'sel-diamond';
-    return captors.map((sel, i) => {
-      const btns = farmerIds.map(fid =>
-        `<button class="mini-player-btn ${sel===fid?selClass:''}" onclick="setCaptor('${type}',${i},${fid})">${pName(fid)}</button>`
+    const capSelClass = type==='heart'?'sel-heart':'sel-diamond';
+    const vicSelClass = type==='heart'?'sel-heart':'sel-diamond';
+    return captors.map((capSel, i) => {
+      const vicSel = victims[i];
+      // Captor row (from farmers)
+      const capBtns = farmerIds.map(fid =>
+        `<button class="mini-player-btn ${capSel===fid?capSelClass:''}" onclick="setCaptor('${type}',${i},${fid})">${pName(fid)}</button>`
       ).join('');
-      return `<div class="who-captor-row"><span class="who-captor-label">第${i+1}张</span><div class="mini-player-row">${btns}</div></div>`;
+      // Victim row (from dealer side)
+      const vicBtns = dealerSideIds.map(did =>
+        `<button class="mini-player-btn ${vicSel===did?vicSelClass:''}" onclick="setVictim('${type}',${i},${did})">${pName(did)}</button>`
+      ).join('');
+      return `<div class="who-captor-row" style="flex-direction:column;align-items:flex-start;gap:4px">
+        <div style="display:flex;align-items:center;gap:8px;width:100%">
+          <span class="who-captor-label">第${i+1}张</span>
+          <span style="font-size:10px;color:var(--text3)">谁抓的？</span>
+          <div class="mini-player-row">${capBtns}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;width:100%;padding-left:28px">
+          <span style="font-size:10px;color:var(--text3)">从谁手里？</span>
+          <div class="mini-player-row">${vicBtns}</div>
+        </div>
+      </div>`;
     }).join('');
   };
 
   const hc = roundForm.heartFiveCaptors.length, dc = roundForm.diamondFiveCaptors.length;
-  const heartWho = hc>0?`<div class="who-prompt"><strong>♥5 被谁抓住？（共${hc}张）</strong>${buildCaptorRows('heart',roundForm.heartFiveCaptors)}</div>`:'';
-  const diamondWho = dc>0?`<div class="who-prompt"><strong>♦5 被谁抓住？（共${dc}张）</strong>${buildCaptorRows('diamond',roundForm.diamondFiveCaptors)}</div>`:'';
+  const heartWho = hc>0?`<div class="who-prompt"><strong>♥5（共${hc}张）</strong>${buildCaptorRows('heart',roundForm.heartFiveCaptors,roundForm.heartFiveVictims)}</div>`:'';
+  const diamondWho = dc>0?`<div class="who-prompt"><strong>♦5（共${dc}张）</strong>${buildCaptorRows('diamond',roundForm.diamondFiveCaptors,roundForm.diamondFiveVictims)}</div>`:'';
 
   const penHtml = state.players.map(p => {
     const cnt = roundForm.penalties[p.id]||0;
@@ -1131,15 +1159,22 @@ function updateScore(val) {
 }
 
 function changeRedFive(type, delta) {
-  const arr = type==='heart'?'heartFiveCaptors':'diamondFiveCaptors';
-  const newCount = Math.max(0, Math.min(3, roundForm[arr].length + delta));
-  roundForm[arr] = roundForm[arr].slice(0, newCount);
-  while(roundForm[arr].length < newCount) roundForm[arr].push(null);
+  const capArr = type==='heart'?'heartFiveCaptors':'diamondFiveCaptors';
+  const vicArr = type==='heart'?'heartFiveVictims':'diamondFiveVictims';
+  const newCount = Math.max(0, Math.min(3, roundForm[capArr].length + delta));
+  roundForm[capArr] = roundForm[capArr].slice(0, newCount);
+  roundForm[vicArr] = roundForm[vicArr].slice(0, newCount);
+  while(roundForm[capArr].length < newCount) { roundForm[capArr].push(null); roundForm[vicArr].push(null); }
   renderRound();
 }
 
 function setCaptor(type, idx, pid) {
   const arr = type==='heart'?'heartFiveCaptors':'diamondFiveCaptors';
+  roundForm[arr][idx] = pid;
+  renderRound();
+}
+function setVictim(type, idx, pid) {
+  const arr = type==='heart'?'heartFiveVictims':'diamondFiveVictims';
   roundForm[arr][idx] = pid;
   renderRound();
 }
@@ -1153,13 +1188,19 @@ function submitRound() {
   const s = state.currentSession; if(!s) return;
   if(roundForm.dealerId===null){showToast('请选择庄家 ❌');return;}
   if(roundForm.heartFiveCaptors.some(c=>c===null)){showToast('请选择所有♥5的抓牌者 ❌');return;}
+  if(roundForm.heartFiveVictims.some(c=>c===null)){showToast('请选择♥5被抓的庄家方玩家 ❌');return;}
   if(roundForm.diamondFiveCaptors.some(c=>c===null)){showToast('请选择所有♦5的抓牌者 ❌');return;}
+  if(roundForm.diamondFiveVictims.some(c=>c===null)){showToast('请选择♦5被抓的庄家方玩家 ❌');return;}
 
   const levelsBefore = {...s.playerLevels};
   const rd = {
     dealerId:roundForm.dealerId, helperIds:[...roundForm.helperIds],
-    score:roundForm.score, heartFiveCaptors:[...roundForm.heartFiveCaptors],
-    diamondFiveCaptors:[...roundForm.diamondFiveCaptors], penalties:{...roundForm.penalties}
+    score:roundForm.score,
+    heartFiveCaptors:[...roundForm.heartFiveCaptors],
+    heartFiveVictims:[...roundForm.heartFiveVictims],
+    diamondFiveCaptors:[...roundForm.diamondFiveCaptors],
+    diamondFiveVictims:[...roundForm.diamondFiveVictims],
+    penalties:{...roundForm.penalties}
   };
   const changes = computeLevelChanges(rd, s);
   const levelsAfter = applyLevelChanges(s, changes);
