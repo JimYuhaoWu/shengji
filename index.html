@@ -867,8 +867,13 @@ function renderRound() {
 // ── STATS ──
 function renderStats() {
   const el = document.getElementById('statsContent');
-  const sessions = state.currentSession ? [...state.sessions, state.currentSession] : state.sessions;
-  const allRounds = []; sessions.forEach(s => s.rounds.forEach(r => allRounds.push({...r, session:s})));
+  // Stats tab = current session only; career tab = all sessions
+  const s = state.currentSession;
+  if (!s || !s.rounds.length) {
+    el.innerHTML='<div class="empty"><div class="empty-icon">📊</div><p>本局暂无数据，请先开始游戏</p></div>';
+    return;
+  }
+  const allRounds = s.rounds.map(r => ({...r, session:s}));
   if (!allRounds.length) { el.innerHTML='<div class="empty"><div class="empty-icon">📊</div><p>暂无数据</p></div>'; return; }
   const tabs=['角色胜率','级别走势','成就榜'];
   const at = window._statsTab||0;
