@@ -177,20 +177,4 @@ A mobile-first web app for recording and analyzing six-player (and five-player) 
 - Round undo (currently editing collapses subsequent rounds)
 - Configurable player count (was hardcoded to 6; now will support 5/6 explicitly)
 
----
 
-## Implementation Task: level.py
-
-### Clarification Questions (to be answered before implementation)
-
-1. **Scope**: Should `level.py` include only core level/scoring logic (level sequences, score → level changes, red five penalties), or also achievements computation?
-
-2. **Game modes**: Should the module support both 5-player and 6-player modes from the start, with differences noted above (helper validation, bidirectional red five penalties, excluded achievements)?
-
-3. **Testing framework**: Prefer `unittest` (stdlib) or `pytest`?
-
-4. **Interface**: Pure library (functions/data) or CLI for testing/demoing?
-
-5. **Level representation**: Keep string keys like `"R1:A"` and `"B2:2"`, or use structured format (tuples/Level class)?
-
-**Pending response from user before implementation begins.**
