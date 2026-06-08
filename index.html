@@ -183,6 +183,15 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
       </div>
     </div>
     <div class="input-group">
+      <label class="input-label">游戏模式</label>
+      <div class="flex-row">
+        <div class="flex-1"><select id="setupGameMode">
+          <option value="6player" selected>6人模式</option>
+          <option value="5player">5人模式</option>
+        </select></div>
+      </div>
+    </div>
+    <div class="input-group">
       <label class="input-label">起始庄家</label>
       <div class="radio-group" id="setupFirstDealer"></div>
     </div>
@@ -361,8 +370,30 @@ function computeLevelChanges(round, session) {
 
   const hCount = (heartFiveCaptors||[]).length;
   const dCount = (diamondFiveCaptors||[]).length;
-  if (hCount > 0) dealerSide.forEach(p => changes[p] -= 2 * hCount);
-  if (dCount > 0) dealerSide.forEach(p => changes[p] -= 1 * dCount);
+
+  if (session.gameMode === '5player') {
+    // 5-player: bidirectional red five penalties
+    if (hCount > 0) {
+      const captorsAreFromFarmer = heartFiveCaptors.some(c => farmerIds.includes(c));
+      if (captorsAreFromFarmer) {
+        dealerSide.forEach(p => changes[p] -= 2 * hCount);
+      } else {
+        farmerIds.forEach(p => changes[p] -= 2 * hCount);
+      }
+    }
+    if (dCount > 0) {
+      const captorsAreFromFarmer = diamondFiveCaptors.some(c => farmerIds.includes(c));
+      if (captorsAreFromFarmer) {
+        dealerSide.forEach(p => changes[p] -= 1 * dCount);
+      } else {
+        farmerIds.forEach(p => changes[p] -= 1 * dCount);
+      }
+    }
+  } else {
+    // 6-player: one-directional (always dealer side penalized)
+    if (hCount > 0) dealerSide.forEach(p => changes[p] -= 2 * hCount);
+    if (dCount > 0) dealerSide.forEach(p => changes[p] -= 1 * dCount);
+  }
 
   Object.entries(penalties||{}).forEach(([pid, cnt]) => { changes[parseInt(pid)] -= cnt; });
   return changes;
@@ -417,7 +448,7 @@ function computeAchievements(round, session, levelsBefore, levelsAfter) {
   if (helperIds.length === 0) {
     ach('How dare you?', 'purple', dealerId);
     if (result.side === 'dealer') ach('Lone Wolf', 'gold', dealerId);
-  } else if (helperIds.length === 1) {
+  } else if (helperIds.length === 1 && session.gameMode !== '5player') {
     ach('浪漫双人车驾驶员', 'purple', dealerId);
     ach('浪漫双人车乘客', 'purple', helperIds[0]);
   }
@@ -1089,12 +1120,13 @@ function selectFirstDealer(id, el) {
 function startSession() {
   const endLevel = document.getElementById('setupEndLevel').value;
   const endRound = document.getElementById('setupEndRound').value;
+  const gameMode = document.getElementById('setupGameMode').value;
   const endKey = endRound + ':' + endLevel;
   const initialLevels = {};
   state.players.forEach(p => initialLevels[p.id] = START_KEY);
   state.currentSession = {
     id: Date.now(), startTime: Date.now(),
-    endKey,
+    endKey, gameMode,
     currentDealerId: window._setupFirstDealer ?? state.players[0].id,
     players: state.players.map(p=>p.id),
     playerLevels: {...initialLevels},
@@ -1105,10 +1137,12 @@ function startSession() {
 }
 
 function cycleRole(pid) {
+  const s = state.currentSession;
+  const maxHelpers = s && s.gameMode === '5player' ? 1 : 2;
   if(roundForm.dealerId===null){roundForm.dealerId=pid;}
   else if(roundForm.dealerId===pid){roundForm.dealerId=null;roundForm.helperIds=roundForm.helperIds.filter(h=>h!==pid);}
   else if(roundForm.helperIds.includes(pid)){roundForm.helperIds=roundForm.helperIds.filter(h=>h!==pid);}
-  else if(roundForm.helperIds.length<2){roundForm.helperIds.push(pid);}
+  else if(roundForm.helperIds.length<maxHelpers){roundForm.helperIds.push(pid);}
   renderRound();
 }
 
@@ -1148,6 +1182,7 @@ function changePenalty(pid, delta) {
 function submitRound() {
   const s = state.currentSession; if(!s) return;
   if(roundForm.dealerId===null){showToast('请选择庄家 ❌');return;}
+  if(s.gameMode === '5player' && roundForm.helperIds.length > 1){showToast('5人模式最多只能选1个帮手 ❌');return;}
   if(roundForm.heartFiveCaptors.some(c=>c===null)){showToast('请选择所有♥5的抓牌者 ❌');return;}
   if(roundForm.heartFiveVictims.some(c=>c===null)){showToast('请选择♥5被抓的庄家方玩家 ❌');return;}
   if(roundForm.diamondFiveCaptors.some(c=>c===null)){showToast('请选择所有♦5的抓牌者 ❌');return;}
